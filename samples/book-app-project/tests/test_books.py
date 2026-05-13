@@ -1,3 +1,4 @@
+import json
 import os
 import sys
 
@@ -157,3 +158,61 @@ def test_format_book_list_with_books():
     result = format_book_list(book_list)
     assert "1. Dune by Frank Herbert (1965) - Read" in result
     assert "2. 1984 by George Orwell (1949) - Unread" in result
+
+
+# --- Contract / golden-file tests (Walk Ex 5) ---
+
+GOLDEN_DIR = os.path.join(os.path.dirname(__file__), "golden")
+
+
+def test_save_produces_golden_json(tmp_path, monkeypatch):
+    """Contract: save_books output matches the golden snapshot exactly."""
+    data_file = tmp_path / "data.json"
+    monkeypatch.setattr(books, "DATA_FILE", str(data_file))
+
+    collection = BookCollection()
+    collection.books = [
+        Book(title="Dune", author="Frank Herbert", year=1965, read=True),
+        Book(title="1984", author="George Orwell", year=1949, read=False),
+    ]
+    collection.save_books()
+
+    actual = json.loads(data_file.read_text())
+    golden_path = os.path.join(GOLDEN_DIR, "books_snapshot.json")
+    with open(golden_path) as f:
+        expected = json.load(f)
+
+    assert actual == expected, (
+        "Saved JSON does not match golden snapshot. "
+        "If the change is intentional, update tests/golden/books_snapshot.json"
+    )
+
+
+def test_load_roundtrip_from_golden(tmp_path, monkeypatch):
+    """Contract: loading the golden file produces the expected Book objects."""
+    import shutil
+
+    golden_path = os.path.join(GOLDEN_DIR, "books_snapshot.json")
+    data_file = tmp_path / "data.json"
+    shutil.copy(golden_path, data_file)
+    monkeypatch.setattr(books, "DATA_FILE", str(data_file))
+
+    collection = BookCollection()
+    assert len(collection.books) == 2
+    assert collection.books[0].title == "Dune"
+    assert collection.books[0].read is True
+    assert collection.books[1].title == "1984"
+    assert collection.books[1].read is False
+
+
+def test_golden_schema_keys():
+    """Contract: golden file contains exactly the expected keys per book."""
+    golden_path = os.path.join(GOLDEN_DIR, "books_snapshot.json")
+    with open(golden_path) as f:
+        data = json.load(f)
+
+    expected_keys = {"title", "author", "year", "read"}
+    for entry in data:
+        assert set(entry.keys()) == expected_keys, (
+            f"Schema mismatch: expected {expected_keys}, got {set(entry.keys())}"
+        )

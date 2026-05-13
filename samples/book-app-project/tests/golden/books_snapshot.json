@@ -1,0 +1,14 @@
+[
+  {
+    "title": "Dune",
+    "author": "Frank Herbert",
+    "year": 1965,
+    "read": true
+  },
+  {
+    "title": "1984",
+    "author": "George Orwell",
+    "year": 1949,
+    "read": false
+  }
+]
