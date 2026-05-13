@@ -1,6 +1,10 @@
 import json
+import logging
+import time
 from dataclasses import dataclass, asdict
 from typing import List, Optional
+
+logger = logging.getLogger(__name__)
 
 DATA_FILE = "data.json"
 
@@ -28,15 +32,20 @@ class BookCollection:
 
     def load_books(self):
         """Load books from the JSON file if it exists."""
+        start = time.perf_counter()
         try:
             with open(DATA_FILE, "r") as f:
                 data = json.load(f)
                 self.books = [Book(**b) for b in data]
+            elapsed_ms = (time.perf_counter() - start) * 1000
+            logger.info(json.dumps({"op": "load_books", "status": "ok", "count": len(self.books), "elapsed_ms": round(elapsed_ms, 2)}))
         except FileNotFoundError:
             self.books = []
+            logger.info(json.dumps({"op": "load_books", "status": "no_file", "count": 0}))
         except json.JSONDecodeError:
             print("Warning: data.json is corrupted. Starting with empty collection.")
             self.books = []
+            logger.warning(json.dumps({"op": "load_books", "status": "corrupt_file", "count": 0}))
 
     def save_books(self):
         """Save the current book collection to JSON."""
@@ -55,9 +64,12 @@ class BookCollection:
             raise ValueError("Author must not be empty.")
         if year < 0:
             raise ValueError("Year must not be negative.")
+        start = time.perf_counter()
         book = Book(title=title.strip(), author=author.strip(), year=year)
         self.books.append(book)
         self.save_books()
+        elapsed_ms = (time.perf_counter() - start) * 1000
+        logger.info(json.dumps({"op": "add_book", "status": "ok", "title": book.title, "elapsed_ms": round(elapsed_ms, 2)}))
         return book
 
     def list_books(self) -> List[Book]:
@@ -82,11 +94,15 @@ class BookCollection:
 
     def remove_book(self, title: str) -> bool:
         """Remove a book by title."""
+        start = time.perf_counter()
         book = self.find_book_by_title(title)
         if book:
             self.books.remove(book)
             self.save_books()
+            elapsed_ms = (time.perf_counter() - start) * 1000
+            logger.info(json.dumps({"op": "remove_book", "status": "ok", "title": title, "elapsed_ms": round(elapsed_ms, 2)}))
             return True
+        logger.info(json.dumps({"op": "remove_book", "status": "not_found", "title": title}))
         return False
 
     def find_by_author(self, author: str) -> List[Book]:
