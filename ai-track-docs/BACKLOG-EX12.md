@@ -1,68 +1,100 @@
-# Backlog — Ex 12
+# Backlog — Book App Improvements
 
-Items generated from repo observations during Crawl exercises 0–11.
+Epic: **Harden book-app-project for production readiness**
+
+Items generated from observations during Crawl (Ex 0–15) and Walk (Ex 1–11) exercises.
+
+---
+
+## Status Key
+
+- [ ] Not started
+- [x] Completed
 
 ---
 
 ## 1. Add duplicate-title prevention to `add_book`
 
-**Why:** Currently `add_book` allows adding multiple books with the same title. This creates ambiguity for `find_book_by_title`, `mark_as_read`, and `remove_book` — all of which match on title.
+**Why:** `add_book` allows multiple books with the same title. With the `_title_index` (Walk Ex 6), the last-added book silently overwrites the index entry, making earlier duplicates unfindable.
 
 **Code:** [`samples/book-app-project/books.py` — `add_book`](../samples/book-app-project/books.py)
 
 **Acceptance Criteria:**
-- [ ] `add_book` raises `ValueError` if a book with the same title already exists (case-insensitive)
+- [ ] `add_book` raises `ValueError` if a book with the same title already exists (case-insensitive check via `_title_index`)
 - [ ] Test added: calling `add_book` twice with the same title raises
 - [ ] Existing tests still pass
+- [ ] Golden file unaffected (no schema change)
 
 ---
 
-## 2. Add test coverage for `find_by_author`
+## 2. Add test coverage for `find_by_author` and `stats()`
 
-**Why:** `find_by_author` has no tests. It's the only public method on `BookCollection` without coverage.
+**Why:** `find_by_author` (original) and `stats()` (Walk Ex 9) have no direct tests. Coverage gaps: `books.py` lines 178–197.
 
-**Code:** [`samples/book-app-project/books.py` — `find_by_author`](../samples/book-app-project/books.py), [`samples/book-app-project/tests/test_books.py`](../samples/book-app-project/tests/test_books.py)
+**Code:** [`samples/book-app-project/books.py`](../samples/book-app-project/books.py), [`samples/book-app-project/tests/test_books.py`](../samples/book-app-project/tests/test_books.py)
 
 **Acceptance Criteria:**
-- [ ] Test: finding by author returns correct books (case-insensitive)
-- [ ] Test: finding by non-existent author returns empty list
-- [ ] Test: multiple books by same author all returned
+- [ ] Test: `find_by_author` returns correct books (case-insensitive)
+- [ ] Test: `find_by_author` with non-existent author returns empty list
+- [ ] Test: `stats()` returns correct total/read/unread/unique_authors counts
+- [ ] Coverage for `books.py` reaches ≥ 97%
 
 ---
 
-## 3. Handle `book_app.py` CLI input errors gracefully
+## 3. Handle CLI input errors gracefully in `book_app.py`
 
-**Why:** `handle_add()` in `book_app.py` catches `ValueError` from `add_book`, but `handle_remove()` and `handle_find()` have no error handling. If `BookCollection` methods raise in the future, the CLI will crash with a traceback.
+**Why:** `handle_add()` catches `ValueError`, but `handle_remove()` and `handle_find()` have no error handling. Future validation in `BookCollection` methods would cause CLI tracebacks.
 
 **Code:** [`samples/book-app-project/book_app.py` — `handle_remove`, `handle_find`](../samples/book-app-project/book_app.py)
 
 **Acceptance Criteria:**
-- [ ] `handle_remove` and `handle_find` wrapped in try/except with user-friendly error messages
-- [ ] No traceback shown to the user on bad input
-- [ ] Manual smoke test documented
+- [ ] `handle_remove` and `handle_find` wrapped in try/except with user-friendly messages
+- [ ] No traceback shown to end users
+- [ ] Manual smoke test documented in PR
 
 ---
 
-## 4. Add structured logging to `mark_as_read`
+## 4. Add `--verbose` flag to `validate.py`
 
-**Why:** In Ex 9, structured logs were added to `load_books`, `add_book`, and `remove_book` — but `mark_as_read` was missed. It's a mutation operation that should also be logged for consistency.
-
-**Code:** [`samples/book-app-project/books.py` — `mark_as_read`](../samples/book-app-project/books.py)
-
-**Acceptance Criteria:**
-- [ ] `mark_as_read` emits structured JSON log with `op`, `status` (ok/not_found), `title`, `elapsed_ms`
-- [ ] Log format matches existing pattern from Ex 9
-- [ ] Existing tests still pass
-
----
-
-## 5. Add `--verbose` flag to `validate.py`
-
-**Why:** The validation script prints all test output by default. For quick checks, a summary-only mode would be useful. Conversely, a `--verbose` flag could show timing per check.
+**Why:** The validation script prints all test output by default. For quick CI checks, summary-only mode would reduce noise.
 
 **Code:** [`validate.py`](../validate.py)
 
 **Acceptance Criteria:**
-- [ ] Default mode: show pass/fail summary only (suppress pytest verbose output)
-- [ ] `--verbose` flag: show full pytest output (current behavior)
-- [ ] Exit code behavior unchanged (0 = pass, 1 = fail)
+- [ ] Default mode: show pass/fail summary only
+- [ ] `--verbose` flag: show full pytest/ruff output
+- [ ] Exit code unchanged (0 = pass, 1 = fail)
+
+---
+
+## 5. CLI integration tests for `book_app.py`
+
+**Why:** `book_app.py` has 0% coverage. All handlers (`handle_list`, `handle_add`, `handle_remove`, `handle_find`) are untested. The CI soft gate (Walk Ex 10) would catch regressions if tests existed.
+
+**Code:** [`samples/book-app-project/book_app.py`](../samples/book-app-project/book_app.py), [`samples/book-app-project/tests/`](../samples/book-app-project/tests/)
+
+**Acceptance Criteria:**
+- [ ] Test: `main()` with no args shows help
+- [ ] Test: `handle_list` with empty and populated collection
+- [ ] Test: `handle_add` with valid and invalid input (mocked stdin)
+- [ ] `book_app.py` coverage ≥ 50%
+- [ ] Overall project coverage ≥ 75%
+
+---
+
+## Completed Items
+
+### ~~Add structured logging to `mark_as_read`~~
+- [x] Completed in Walk Ex 9 — `mark_as_read` now emits structured JSON log with op/status/title
+
+---
+
+## Priority Order
+
+| Priority | Item | Effort | Impact |
+|---|---|---|---|
+| P1 | #1 Duplicate prevention | Small | Prevents data corruption |
+| P1 | #2 Test coverage gaps | Small | Improves confidence |
+| P2 | #5 CLI integration tests | Medium | Covers 0% → 50%+ |
+| P2 | #3 CLI error handling | Small | User experience |
+| P3 | #4 Verbose flag | Small | Developer convenience |
