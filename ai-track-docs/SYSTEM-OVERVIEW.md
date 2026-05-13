@@ -1,5 +1,9 @@
 # System Overview
 
+## Architecture Diagram
+
+See [architecture.mmd](architecture.mmd) for the full component map with real file paths and data flows.
+
 ## Repository
 
 - **Repo:** copilot-cli-for-beginners
