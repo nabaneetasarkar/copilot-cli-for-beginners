@@ -44,6 +44,22 @@ output.json
 __pycache__/
 *.pyc
 *.pyo
+venv/
+.venv/
+*.egg-info/
+
+# Secrets & credentials
+*.pem
+*.key
+*.crt
+*.p12
+*.pfx
+*.jks
+*.keystore
+.credentials
+*.secret
+id_rsa*
+id_ed25519*
 
 # .NET
 bin/
