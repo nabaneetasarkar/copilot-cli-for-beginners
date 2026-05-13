@@ -4,11 +4,11 @@ import sys
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-import pytest  # noqa: E402
+import pytest
 
-import books  # noqa: E402
-from books import Book, BookCollection  # noqa: E402
-from utils import format_book_list  # noqa: E402
+import books
+from books import Book, BookCollection
+from utils import format_book_list
 
 
 @pytest.fixture(autouse=True)

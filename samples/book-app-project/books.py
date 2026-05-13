@@ -4,7 +4,6 @@ import logging
 import os
 import tempfile
 import time
-from typing import List, Optional
 
 logger = logging.getLogger(__name__)
 
@@ -31,7 +30,7 @@ class BookCollection:
     """
 
     def __init__(self):
-        self.books: List[Book] = []
+        self.books: list[Book] = []
         self._title_index: dict[str, Book] = {}
         self.load_books()
 
@@ -43,7 +42,7 @@ class BookCollection:
         """Load books from the JSON file if it exists."""
         start = time.perf_counter()
         try:
-            with open(DATA_FILE, "r") as f:
+            with open(DATA_FILE) as f:
                 data = json.load(f)
                 self.books = [Book(**b) for b in data]
             self._rebuild_index()
@@ -72,7 +71,7 @@ class BookCollection:
 
         Uses atomic write (temp file + rename) so a crash or disk error
         never leaves a half-written data file.  If the write fails, the
-        original file is preserved and an IOError is raised.
+        original file is preserved and an OSError is raised.
         """
         data = json.dumps([asdict(b) for b in self.books], indent=2)
         dir_name = os.path.dirname(os.path.abspath(DATA_FILE))
@@ -91,7 +90,7 @@ class BookCollection:
                 "op": "save_books", "status": "error",
                 "error": str(exc),
             }))
-            raise IOError(f"Failed to save books: {exc}") from exc
+            raise OSError(f"Failed to save books: {exc}") from exc
 
     def add_book(self, title: str, author: str, year: int) -> Book:
         """Create a new Book, append it to the collection, and save.
@@ -120,11 +119,11 @@ class BookCollection:
         }))
         return book
 
-    def list_books(self) -> List[Book]:
+    def list_books(self) -> list[Book]:
         """Return all books in the collection."""
         return self.books
 
-    def find_book_by_title(self, title: str) -> Optional[Book]:
+    def find_book_by_title(self, title: str) -> Book | None:
         """Find a book by title. Case-insensitive by default.
 
         Uses an O(1) dict lookup (case-insensitive mode) instead of
@@ -176,7 +175,7 @@ class BookCollection:
         }))
         return False
 
-    def find_by_author(self, author: str) -> List[Book]:
+    def find_by_author(self, author: str) -> list[Book]:
         """Find all books by a given author."""
         results = [b for b in self.books if b.author.lower() == author.lower()]
         logger.info(json.dumps({
