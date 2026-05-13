@@ -51,3 +51,37 @@ def test_remove_book_invalid():
     collection = BookCollection()
     result = collection.remove_book("Nonexistent Book")
     assert result is False
+
+
+def test_find_book_by_title_case_insensitive():
+    """Deterministic test: find_book_by_title is case-insensitive."""
+    collection = BookCollection()
+    collection.add_book("The Great Gatsby", "F. Scott Fitzgerald", 1925)
+    # Search with different casing — should still find the book
+    book = collection.find_book_by_title("the great gatsby")
+    assert book is not None
+    assert book.title == "The Great Gatsby"
+    assert book.author == "F. Scott Fitzgerald"
+    assert book.year == 1925
+    assert book.read is False
+
+
+def test_add_book_empty_title_raises():
+    """Negative test: adding a book with an empty title raises ValueError."""
+    collection = BookCollection()
+    with pytest.raises(ValueError, match="Title must not be empty"):
+        collection.add_book("", "Some Author", 2024)
+
+
+def test_add_book_empty_author_raises():
+    """Negative test: adding a book with an empty author raises ValueError."""
+    collection = BookCollection()
+    with pytest.raises(ValueError, match="Author must not be empty"):
+        collection.add_book("Some Title", "  ", 2024)
+
+
+def test_add_book_negative_year_raises():
+    """Negative test: adding a book with a negative year raises ValueError."""
+    collection = BookCollection()
+    with pytest.raises(ValueError, match="Year must not be negative"):
+        collection.add_book("Some Title", "Some Author", -1)
