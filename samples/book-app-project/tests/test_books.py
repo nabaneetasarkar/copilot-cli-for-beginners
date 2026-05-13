@@ -288,3 +288,63 @@ def test_golden_schema_keys():
         assert set(entry.keys()) == expected_keys, (
             f"Schema mismatch: expected {expected_keys}, got {set(entry.keys())}"
         )
+
+
+# --- Contract: stats() API boundary (Run Ex 5) ---
+
+
+def test_stats_contract_keys():
+    """Contract: stats() returns exactly the expected keys."""
+    collection = BookCollection()
+    collection.add_book("Dune", "Frank Herbert", 1965)
+    result = collection.stats()
+    expected_keys = {"total_books", "read", "unread", "unique_authors"}
+    assert set(result.keys()) == expected_keys, (
+        f"stats() schema mismatch: expected {expected_keys}, got {set(result.keys())}"
+    )
+
+
+def test_stats_contract_types():
+    """Contract: stats() values are all integers."""
+    collection = BookCollection()
+    collection.add_book("Dune", "Frank Herbert", 1965)
+    collection.add_book("1984", "George Orwell", 1949)
+    collection.mark_as_read("Dune")
+    result = collection.stats()
+    for key, value in result.items():
+        assert isinstance(value, int), (
+            f"stats()['{key}'] should be int, got {type(value).__name__}"
+        )
+
+
+def test_stats_contract_values():
+    """Contract: stats() values are consistent (read + unread == total)."""
+    collection = BookCollection()
+    collection.add_book("Dune", "Frank Herbert", 1965)
+    collection.add_book("1984", "George Orwell", 1949)
+    collection.mark_as_read("Dune")
+    result = collection.stats()
+    assert result["total_books"] == result["read"] + result["unread"], (
+        "stats() invariant broken: total != read + unread"
+    )
+
+
+# --- Contract: format_book_list display boundary (Run Ex 5) ---
+
+
+def test_format_book_list_contract_line_pattern():
+    """Contract: each book line matches the expected display pattern."""
+    import re
+
+    book_list = [
+        Book(title="Dune", author="Frank Herbert", year=1965, read=True),
+    ]
+    result = format_book_list(book_list)
+    lines = result.strip().split("\n")
+    # First line is header "Your Books:", book lines start at index 1
+    book_line = lines[1]
+    pattern = r"^\d+\. .+ by .+ \(\d{4}\) - (Read|Unread)$"
+    assert re.match(pattern, book_line), (
+        f"Display format contract broken. Expected pattern '{pattern}', "
+        f"got: '{book_line}'"
+    )
