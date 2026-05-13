@@ -348,3 +348,49 @@ def test_format_book_list_contract_line_pattern():
         f"Display format contract broken. Expected pattern '{pattern}', "
         f"got: '{book_line}'"
     )
+
+
+# --- Security hardening tests (Run Ex 8) ---
+
+
+def test_year_upper_bound_rejected():
+    """Security: years above MAX_YEAR are rejected."""
+    collection = BookCollection()
+    with pytest.raises(ValueError, match="must not exceed"):
+        collection.add_book("Future Book", "Author", 10000)
+
+
+def test_year_at_max_accepted():
+    """Security: year exactly at MAX_YEAR is accepted."""
+    collection = BookCollection()
+    book = collection.add_book("Edge Book", "Author", books.MAX_YEAR)
+    assert book.year == books.MAX_YEAR
+
+
+def test_load_rejects_oversized_file(tmp_path, monkeypatch):
+    """Security: load_books refuses files exceeding MAX_DATA_FILE_BYTES."""
+    big_file = tmp_path / "data.json"
+    # Write a valid JSON file larger than the limit
+    monkeypatch.setattr(books, "MAX_DATA_FILE_BYTES", 100)
+    record = {
+        "title": "X" * 200, "author": "A",
+        "year": 2000, "read": False,
+    }
+    big_file.write_text(json.dumps([record]))
+    monkeypatch.setattr(books, "DATA_FILE", str(big_file))
+    collection = BookCollection()
+    assert collection.books == []
+
+
+def test_load_strips_unknown_keys(tmp_path, monkeypatch):
+    """Security: unknown keys in data.json are silently stripped."""
+    data_file = tmp_path / "data.json"
+    data_file.write_text(json.dumps([
+        {"title": "Dune", "author": "Frank Herbert", "year": 1965, "read": False,
+         "injected": "malicious", "extra_field": 42}
+    ]))
+    monkeypatch.setattr(books, "DATA_FILE", str(data_file))
+    collection = BookCollection()
+    assert len(collection.books) == 1
+    assert collection.books[0].title == "Dune"
+    assert not hasattr(collection.books[0], "injected")

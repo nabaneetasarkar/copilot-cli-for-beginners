@@ -39,6 +39,49 @@ python -m pip_audit
 | Bandit (source files) | No issues identified |
 | pip-audit | No known vulnerabilities found |
 
+### Scan Results (Run Ex 8)
+
+| Scan | Result |
+|---|---|
+| Ruff (E/W/F/I/S/B/UP/RUF) | All checks passed |
+| Bandit `-r . -ll --exclude ./tests` | No issues identified (371 lines scanned) |
+
+## Hardening Applied (Run Ex 8)
+
+### 1. Schema validation on `load_books`
+
+Unknown keys in `data.json` records are silently stripped before constructing `Book` objects. Only `{title, author, year, read}` are accepted. A warning log is emitted for each record with extra keys.
+
+- **Risk mitigated:** Data injection via tampered/corrupted JSON files
+- **Side effects:** None — existing valid data files are unaffected
+- **Constant:** `_BOOK_KEYS = frozenset({"title", "author", "year", "read"})`
+
+### 2. File size limit on `load_books`
+
+Loading is refused if `data.json` exceeds `MAX_DATA_FILE_BYTES` (default 10 MB). The collection starts empty and a warning is printed + logged.
+
+- **Risk mitigated:** Memory exhaustion from maliciously large data files
+- **Side effects:** None — normal data files are orders of magnitude smaller
+- **Constant:** `MAX_DATA_FILE_BYTES = 10 * 1024 * 1024`
+- **Override:** Not configurable via env var (hardcoded safety limit)
+
+### 3. Year upper bound in `add_book`
+
+`add_book()` now rejects years exceeding `MAX_YEAR` (9999) with `ValueError`.
+
+- **Risk mitigated:** Absurd/unbounded integer values in data
+- **Side effects:** None — no valid book has a year > 9999
+- **Constant:** `MAX_YEAR = 9999`
+
+### Tests Added
+
+| Test | Validates |
+|---|---|
+| `test_year_upper_bound_rejected` | Year > MAX_YEAR raises ValueError |
+| `test_year_at_max_accepted` | Year == MAX_YEAR succeeds |
+| `test_load_rejects_oversized_file` | Oversized data.json → empty collection |
+| `test_load_strips_unknown_keys` | Extra JSON keys stripped, Book created normally |
+
 ### Justified Suppression
 
 | Rule | File | Justification |

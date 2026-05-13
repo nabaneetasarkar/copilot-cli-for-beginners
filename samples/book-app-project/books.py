@@ -12,6 +12,9 @@ CASE_SENSITIVE = os.environ.get("BOOK_APP_CASE_SENSITIVE", "0") == "1"
 STRICT_VALIDATION = os.environ.get("BOOK_APP_STRICT_VALIDATION", "0") == "1"
 SAVE_MAX_RETRIES = 3
 SAVE_BACKOFF_BASE = 0.1  # seconds; doubles each retry
+MAX_DATA_FILE_BYTES = 10 * 1024 * 1024  # 10 MB — reject oversized data files
+MAX_YEAR = 9999
+_BOOK_KEYS = frozenset({"title", "author", "year", "read"})
 
 
 @dataclass
@@ -54,9 +57,31 @@ class BookCollection:
         """Load books from the JSON file if it exists."""
         start = time.perf_counter()
         try:
+            file_size = os.path.getsize(DATA_FILE)
+            if file_size > MAX_DATA_FILE_BYTES:
+                print(
+                    f"Warning: data.json exceeds {MAX_DATA_FILE_BYTES} bytes. "
+                    "Refusing to load."
+                )
+                self.books = []
+                logger.warning(json.dumps({
+                    "op": "load_books", "status": "file_too_large",
+                    "size_bytes": file_size,
+                    "limit_bytes": MAX_DATA_FILE_BYTES,
+                }))
+                return
             with open(DATA_FILE) as f:
                 data = json.load(f)
-                self.books = [Book(**b) for b in data]
+                for record in data:
+                    extra = set(record.keys()) - _BOOK_KEYS
+                    if extra:
+                        logger.warning(json.dumps({
+                            "op": "load_books", "status": "unknown_keys",
+                            "keys": sorted(extra),
+                        }))
+                    # Only pass known keys to Book()
+                    filtered = {k: record[k] for k in _BOOK_KEYS if k in record}
+                    self.books.append(Book(**filtered))
             self._rebuild_index()
             elapsed_ms = (time.perf_counter() - start) * 1000
             logger.info(json.dumps({
@@ -141,6 +166,8 @@ class BookCollection:
             raise ValueError("Author must not be empty.")
         if year < 0:
             raise ValueError("Year must not be negative.")
+        if year > MAX_YEAR:
+            raise ValueError(f"Year must not exceed {MAX_YEAR}.")
         if STRICT_VALIDATION and title.strip().lower() in self._title_index:
             raise ValueError(f"A book titled '{title.strip()}' already exists.")
         start = time.perf_counter()
