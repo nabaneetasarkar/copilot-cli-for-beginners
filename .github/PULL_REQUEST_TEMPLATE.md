@@ -58,6 +58,51 @@
 - [ ] Tests pass locally
 - [ ] Coverage maintained or improved
 - [ ] No new lint/security warnings
+
+## AI Review (Copilot-Assisted)
+
+<!-- Fill this section using Copilot to generate review focus.
+     Prompt: "Review this PR for risks, edge cases, and missing tests."
+     Delete items that don't apply. -->
+
+### Risks Identified
+
+<!-- List specific risks ranked by severity.
+     Example:
+     - HIGH: Schema change breaks backward compatibility with existing data.json files
+     - LOW: New constant not configurable via env var (acceptable for safety limit)
+-->
+
+- 
+
+### Verification Matrix
+
+<!-- Map each change to its verification evidence.
+     Every row should have at least one test or manual check. -->
+
+| Change | Test / Evidence | Verified? |
+|---|---|---|
+|  |  | [ ] |
+
+### Edge Cases Reviewed
+
+<!-- List edge cases considered. Mark if tested or documented.
+     Example:
+     - Empty data.json → tested (test_save_books_survives_corrupt_load)
+     - data.json with unknown keys → tested (test_load_strips_unknown_keys)
+     - Concurrent writes → documented (atomic write via tempfile + os.replace)
+-->
+
+- 
+
+### Response to Findings
+
+<!-- If AI review or self-review found issues, document how each was addressed.
+     Example:
+     - Finding: "Year validation missing upper bound" → Fixed: added MAX_YEAR check
+     - Finding: "No test for oversized file" → Fixed: added test_load_rejects_oversized_file
+     - Finding: "Acceptable risk" → Documented in risk section
+-->
 - [ ] Documentation updated if behavior changed
 - [ ] Commit message follows `<level>: ex<N> <short-name>` convention
 
