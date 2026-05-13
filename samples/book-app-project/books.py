@@ -10,6 +10,7 @@ logger = logging.getLogger(__name__)
 
 DATA_FILE = "data.json"
 CASE_SENSITIVE = os.environ.get("BOOK_APP_CASE_SENSITIVE", "0") == "1"
+STRICT_VALIDATION = os.environ.get("BOOK_APP_STRICT_VALIDATION", "0") == "1"
 
 
 @dataclass
@@ -104,6 +105,8 @@ class BookCollection:
             raise ValueError("Author must not be empty.")
         if year < 0:
             raise ValueError("Year must not be negative.")
+        if STRICT_VALIDATION and title.strip().lower() in self._title_index:
+            raise ValueError(f"A book titled '{title.strip()}' already exists.")
         start = time.perf_counter()
         book = Book(title=title.strip(), author=author.strip(), year=year)
         self.books.append(book)
