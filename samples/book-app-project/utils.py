@@ -25,6 +25,16 @@ def get_book_details():
     return title, author, year
 
 
+def get_title_input(prompt: str = "Enter the title of the book: ") -> str:
+    """Prompt for and return a stripped book title."""
+    return input(prompt).strip()
+
+
+def get_author_input(prompt: str = "Author name: ") -> str:
+    """Prompt for and return a stripped author name."""
+    return input(prompt).strip()
+
+
 def format_book_list(books) -> str:
     """Format a list of Book objects into a human-readable string.
 

@@ -8,7 +8,7 @@ import pytest
 
 import books
 from books import Book, BookCollection
-from utils import format_book_list
+from utils import format_book_list, get_author_input, get_title_input
 
 
 @pytest.fixture(autouse=True)
@@ -218,6 +218,18 @@ def test_format_book_list_with_books():
     result = format_book_list(book_list)
     assert "1. Dune by Frank Herbert (1965) - Read" in result
     assert "2. 1984 by George Orwell (1949) - Unread" in result
+
+
+def test_get_title_input_strips_whitespace(monkeypatch):
+    """get_title_input strips leading/trailing whitespace from user input."""
+    monkeypatch.setattr("builtins.input", lambda _: "  Dune  ")
+    assert get_title_input() == "Dune"
+
+
+def test_get_author_input_strips_whitespace(monkeypatch):
+    """get_author_input strips leading/trailing whitespace from user input."""
+    monkeypatch.setattr("builtins.input", lambda _: "  Frank Herbert  ")
+    assert get_author_input() == "Frank Herbert"
 
 
 # --- Contract / golden-file tests (Walk Ex 5) ---
