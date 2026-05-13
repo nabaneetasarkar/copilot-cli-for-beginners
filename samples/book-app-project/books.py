@@ -34,11 +34,21 @@ class BookCollection:
     def __init__(self):
         self.books: list[Book] = []
         self._title_index: dict[str, Book] = {}
+        self._author_index: dict[str, list[Book]] = {}
         self.load_books()
 
     def _rebuild_index(self):
-        """Rebuild the title lookup index from the current books list."""
-        self._title_index = {b.title.lower(): b for b in self.books}
+        """Rebuild title and author lookup indexes in a single pass."""
+        title_idx: dict[str, Book] = {}
+        author_idx: dict[str, list[Book]] = {}
+        for b in self.books:
+            title_idx[b.title.lower()] = b
+            key = b.author.lower()
+            if key not in author_idx:
+                author_idx[key] = []
+            author_idx[key].append(b)
+        self._title_index = title_idx
+        self._author_index = author_idx
 
     def load_books(self):
         """Load books from the JSON file if it exists."""
@@ -137,6 +147,7 @@ class BookCollection:
         book = Book(title=title.strip(), author=author.strip(), year=year)
         self.books.append(book)
         self._title_index[book.title.lower()] = book
+        self._author_index.setdefault(book.author.lower(), []).append(book)
         self.save_books()
         elapsed_ms = (time.perf_counter() - start) * 1000
         logger.info(json.dumps({
@@ -188,6 +199,14 @@ class BookCollection:
         if book:
             self.books.remove(book)
             self._title_index.pop(book.title.lower(), None)
+            author_key = book.author.lower()
+            if author_key in self._author_index:
+                self._author_index[author_key] = [
+                    b for b in self._author_index[author_key]
+                    if b is not book
+                ]
+                if not self._author_index[author_key]:
+                    del self._author_index[author_key]
             self.save_books()
             elapsed_ms = (time.perf_counter() - start) * 1000
             logger.info(json.dumps({
@@ -203,8 +222,8 @@ class BookCollection:
         return False
 
     def find_by_author(self, author: str) -> list[Book]:
-        """Find all books by a given author."""
-        results = [b for b in self.books if b.author.lower() == author.lower()]
+        """Find all books by a given author. O(1) dict lookup."""
+        results = self._author_index.get(author.lower(), [])
         logger.info(json.dumps({
             "op": "find_by_author", "status": "ok",
             "author": author,
