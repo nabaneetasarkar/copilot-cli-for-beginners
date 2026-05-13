@@ -16,10 +16,10 @@ dev = [
 line-length = 88
 
 [tool.ruff.lint]
-select = ["E", "W", "F", "I", "S", "B", "UP", "RUF"]
+select = ["E", "W", "F", "I", "S", "B", "UP", "RUF", "C4", "SIM", "PTH", "PERF", "T20"]
 
 [tool.ruff.lint.per-file-ignores]
-"bench_find.py" = ["E402", "T20"]
+"bench_find.py" = ["E402", "T20", "PTH"]
 "book_app.py" = ["T20"]
 "utils.py" = ["T20"]
 "tests/*" = ["E402", "S101"]

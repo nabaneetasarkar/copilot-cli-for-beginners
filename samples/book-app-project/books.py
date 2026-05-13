@@ -2,8 +2,10 @@ from dataclasses import asdict, dataclass
 import json
 import logging
 import os
+from pathlib import Path
 import tempfile
 import time
+from typing import TypeVar
 
 logger = logging.getLogger(__name__)
 
@@ -13,9 +15,60 @@ STRICT_VALIDATION = os.environ.get("BOOK_APP_STRICT_VALIDATION", "0") == "1"
 STRICT_LOAD = os.environ.get("BOOK_APP_STRICT_LOAD", "0") == "1"
 SAVE_MAX_RETRIES = 3
 SAVE_BACKOFF_BASE = 0.1  # seconds; doubles each retry
+LOAD_MAX_RETRIES = 2
+LOAD_BACKOFF_BASE = 0.05  # seconds
 MAX_DATA_FILE_BYTES = 10 * 1024 * 1024  # 10 MB — reject oversized data files
 MAX_YEAR = 9999
 _BOOK_KEYS = frozenset({"title", "author", "year", "read"})
+
+_T = TypeVar("_T")
+
+
+def retry_with_backoff(
+    fn,
+    *,
+    max_retries: int = 3,
+    backoff_base: float = 0.1,
+    op: str = "unknown",
+    exceptions: tuple = (OSError,),
+):
+    """Call *fn* with exponential backoff on transient failures.
+
+    Returns the result of *fn()* on success.  Raises the last caught
+    exception if all retries are exhausted.
+
+    Args:
+        fn: Zero-argument callable to execute.
+        max_retries: Total number of attempts.
+        backoff_base: Initial delay in seconds (doubles each retry).
+        op: Operation name for structured log messages.
+        exceptions: Tuple of exception types to catch and retry.
+    """
+    last_exc: Exception | None = None
+    for attempt in range(1, max_retries + 1):
+        try:
+            result = fn()
+            if attempt > 1:
+                logger.info(json.dumps({
+                    "op": op, "status": "ok_after_retry",
+                    "attempt": attempt,
+                }))
+            return result
+        except exceptions as exc:  # noqa: PERF203
+            last_exc = exc
+            logger.warning(json.dumps({
+                "op": op, "status": "retry",
+                "attempt": attempt,
+                "error": str(exc),
+            }))
+            if attempt < max_retries:
+                time.sleep(backoff_base * (2 ** (attempt - 1)))
+
+    logger.error(json.dumps({
+        "op": op, "status": "error",
+        "error": str(last_exc),
+    }))
+    raise last_exc  # type: ignore[misc]
 
 
 @dataclass
@@ -58,41 +111,7 @@ class BookCollection:
         """Load books from the JSON file if it exists."""
         start = time.perf_counter()
         try:
-            file_size = os.path.getsize(DATA_FILE)
-            if file_size > MAX_DATA_FILE_BYTES:
-                msg = (
-                    f"data.json exceeds {MAX_DATA_FILE_BYTES} bytes "
-                    f"({file_size} bytes). Refusing to load."
-                )
-                logger.warning(json.dumps({
-                    "op": "load_books", "status": "file_too_large",
-                    "size_bytes": file_size,
-                    "limit_bytes": MAX_DATA_FILE_BYTES,
-                }))
-                if STRICT_LOAD:
-                    raise OSError(msg)
-                print(f"Warning: {msg}")
-                self.books = []
-                return
-            with open(DATA_FILE) as f:
-                data = json.load(f)
-                for record in data:
-                    extra = set(record.keys()) - _BOOK_KEYS
-                    if extra:
-                        logger.warning(json.dumps({
-                            "op": "load_books", "status": "unknown_keys",
-                            "keys": sorted(extra),
-                        }))
-                    # Only pass known keys to Book()
-                    filtered = {k: record[k] for k in _BOOK_KEYS if k in record}
-                    self.books.append(Book(**filtered))
-            self._rebuild_index()
-            elapsed_ms = (time.perf_counter() - start) * 1000
-            logger.info(json.dumps({
-                "op": "load_books", "status": "ok",
-                "count": len(self.books),
-                "elapsed_ms": round(elapsed_ms, 2),
-            }))
+            self._load_books_inner(start)
         except FileNotFoundError:
             self.books = []
             logger.info(json.dumps({
@@ -108,8 +127,57 @@ class BookCollection:
                 raise OSError(
                     "data.json is corrupted and STRICT_LOAD is enabled"
                 ) from exc
-            print("Warning: data.json is corrupted. Starting with empty collection.")
+            print("Warning: data.json is corrupted. Starting with empty collection.")  # noqa: T201
             self.books = []
+
+    def _load_books_inner(self, start: float):
+        """Read and parse data.json with retry on transient OSError."""
+
+        def _read_file():
+            file_size = Path(DATA_FILE).stat().st_size
+            if file_size > MAX_DATA_FILE_BYTES:
+                msg = (
+                    f"data.json exceeds {MAX_DATA_FILE_BYTES} bytes "
+                    f"({file_size} bytes). Refusing to load."
+                )
+                logger.warning(json.dumps({
+                    "op": "load_books", "status": "file_too_large",
+                    "size_bytes": file_size,
+                    "limit_bytes": MAX_DATA_FILE_BYTES,
+                }))
+                if STRICT_LOAD:
+                    raise OSError(msg)
+                print(f"Warning: {msg}")  # noqa: T201
+                return None
+            with Path(DATA_FILE).open() as f:
+                return json.load(f)
+
+        data = retry_with_backoff(
+            _read_file,
+            max_retries=LOAD_MAX_RETRIES,
+            backoff_base=LOAD_BACKOFF_BASE,
+            op="load_books",
+            exceptions=(PermissionError,),
+        )
+        if data is None:
+            self.books = []
+            return
+        for record in data:
+            extra = set(record.keys()) - _BOOK_KEYS
+            if extra:
+                logger.warning(json.dumps({
+                    "op": "load_books", "status": "unknown_keys",
+                    "keys": sorted(extra),
+                }))
+            filtered = {k: record[k] for k in _BOOK_KEYS if k in record}
+            self.books.append(Book(**filtered))
+        self._rebuild_index()
+        elapsed_ms = (time.perf_counter() - start) * 1000
+        logger.info(json.dumps({
+            "op": "load_books", "status": "ok",
+            "count": len(self.books),
+            "elapsed_ms": round(elapsed_ms, 2),
+        }))
 
     def save_books(self):
         """Save the current book collection to JSON.
@@ -121,10 +189,9 @@ class BookCollection:
         and an OSError is raised.
         """
         data = json.dumps([asdict(b) for b in self.books], indent=2)
-        dir_name = os.path.dirname(os.path.abspath(DATA_FILE))
-        last_exc: OSError | None = None
+        dir_name = str(Path(DATA_FILE).resolve().parent)
 
-        for attempt in range(1, SAVE_MAX_RETRIES + 1):
+        def _atomic_write():
             tmp_path = None
             try:
                 fd, tmp_path = tempfile.mkstemp(
@@ -132,35 +199,18 @@ class BookCollection:
                 )
                 with os.fdopen(fd, "w") as f:
                     f.write(data)
-                os.replace(tmp_path, DATA_FILE)
-                if attempt > 1:
-                    logger.info(json.dumps({
-                        "op": "save_books", "status": "ok_after_retry",
-                        "attempt": attempt,
-                    }))
-                return  # success
-            except OSError as exc:
-                last_exc = exc
-                # Clean up temp file if it was created
-                if tmp_path and os.path.exists(tmp_path):
-                    os.unlink(tmp_path)
-                logger.warning(json.dumps({
-                    "op": "save_books", "status": "retry",
-                    "attempt": attempt,
-                    "error": str(exc),
-                }))
-                if attempt < SAVE_MAX_RETRIES:
-                    time.sleep(SAVE_BACKOFF_BASE * (2 ** (attempt - 1)))
+                Path(tmp_path).replace(DATA_FILE)
+            except OSError:
+                if tmp_path and Path(tmp_path).exists():
+                    Path(tmp_path).unlink()
+                raise
 
-        # All retries exhausted
-        logger.error(json.dumps({
-            "op": "save_books", "status": "error",
-            "error": str(last_exc),
-        }))
-        raise OSError(
-            f"Failed to save books after {SAVE_MAX_RETRIES} attempts: "
-            f"{last_exc}"
-        ) from last_exc
+        retry_with_backoff(
+            _atomic_write,
+            max_retries=SAVE_MAX_RETRIES,
+            backoff_base=SAVE_BACKOFF_BASE,
+            op="save_books",
+        )
 
     def add_book(self, title: str, author: str, year: int) -> Book:
         """Create a new Book, append it to the collection, and save.
