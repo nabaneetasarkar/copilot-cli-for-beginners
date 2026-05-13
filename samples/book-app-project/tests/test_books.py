@@ -153,10 +153,12 @@ def test_save_books_survives_corrupt_load(tmp_path, monkeypatch):
 
 
 def test_save_books_atomic_write_on_disk_error(tmp_path, monkeypatch):
-    """Failure test: save_books raises IOError when disk write fails."""
+    """Failure test: save_books raises OSError after all retries exhausted."""
     data_file = tmp_path / "data.json"
     data_file.write_text("[]")
     monkeypatch.setattr(books, "DATA_FILE", str(data_file))
+    monkeypatch.setattr(books, "SAVE_MAX_RETRIES", 2)
+    monkeypatch.setattr(books, "SAVE_BACKOFF_BASE", 0)  # no delay in tests
     collection = BookCollection()
 
     # Simulate disk failure by making mkstemp raise
@@ -167,8 +169,36 @@ def test_save_books_atomic_write_on_disk_error(tmp_path, monkeypatch):
 
     monkeypatch.setattr(_tempfile, "mkstemp", failing_mkstemp)
 
-    with pytest.raises(IOError, match="Failed to save books"):
+    with pytest.raises(OSError, match="after 2 attempts"):
         collection.add_book("Fail Book", "Author", 2024)
+
+
+def test_save_books_retry_succeeds_after_transient_failure(tmp_path, monkeypatch):
+    """Resilience: save_books retries on transient OSError and succeeds."""
+    data_file = tmp_path / "data.json"
+    data_file.write_text("[]")
+    monkeypatch.setattr(books, "DATA_FILE", str(data_file))
+    monkeypatch.setattr(books, "SAVE_MAX_RETRIES", 3)
+    monkeypatch.setattr(books, "SAVE_BACKOFF_BASE", 0)  # no delay in tests
+    collection = BookCollection()
+
+    import tempfile as _tempfile
+
+    real_mkstemp = _tempfile.mkstemp
+    call_count = {"n": 0}
+
+    def flaky_mkstemp(**kwargs):
+        call_count["n"] += 1
+        if call_count["n"] <= 1:
+            raise OSError("Transient disk error")
+        return real_mkstemp(**kwargs)
+
+    monkeypatch.setattr(_tempfile, "mkstemp", flaky_mkstemp)
+
+    # Should succeed on retry despite first failure
+    book = collection.add_book("Retry Book", "Author", 2024)
+    assert book.title == "Retry Book"
+    assert len(collection.books) == 1
 
 
 # --- format_book_list tests (Walk Ex 3) ---
