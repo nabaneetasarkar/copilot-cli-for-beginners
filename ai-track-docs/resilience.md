@@ -13,32 +13,55 @@ Replaced direct write with **atomic write**:
 
 ---
 
-## Improvement 2: Retry with Exponential Backoff (Walk Ex 15)
+## Improvement 2: Generic `retry_with_backoff` Helper (Run Ex 15)
 
 ### Problem
-Transient disk errors (antivirus locks, momentary I/O contention) cause `save_books` to fail permanently, even when the issue resolves within milliseconds.
+Retry logic was inline in `save_books`, making it hard to reuse for other call paths and difficult to maintain consistently.
 
 ### Solution
-Wrapped the atomic write in a **retry loop** with exponential backoff:
+Extracted a **reusable `retry_with_backoff` function** at the module level:
 
-| Parameter | Default | Env override |
+```python
+def retry_with_backoff(fn, *, max_retries=3, backoff_base=0.1,
+                       op="unknown", exceptions=(OSError,)):
+```
+
+| Parameter | Purpose |
+|---|---|
+| `fn` | Zero-argument callable to execute |
+| `max_retries` | Total number of attempts |
+| `backoff_base` | Initial delay in seconds (doubles each retry) |
+| `op` | Operation name for structured log messages |
+| `exceptions` | Tuple of exception types to catch and retry |
+
+### Applied To
+
+| Call Path | Exceptions Caught | Constants |
 |---|---|---|
-| `SAVE_MAX_RETRIES` | 3 | Hardcoded constant |
-| `SAVE_BACKOFF_BASE` | 0.1s | Hardcoded constant |
+| `save_books` (atomic write) | `OSError` | `SAVE_MAX_RETRIES=3`, `SAVE_BACKOFF_BASE=0.1` |
+| `load_books` (file read) | `PermissionError` | `LOAD_MAX_RETRIES=2`, `LOAD_BACKOFF_BASE=0.05` |
 
-**Backoff schedule:** 0.1s → 0.2s → (give up)
+### Tuning Guide
 
-```
-Attempt 1: try write → fail → sleep 0.1s
-Attempt 2: try write → fail → sleep 0.2s
-Attempt 3: try write → fail → raise OSError
-```
+| Constant | Default | Effect |
+|---|---|---|
+| `SAVE_MAX_RETRIES` | 3 | Number of save attempts before giving up |
+| `SAVE_BACKOFF_BASE` | 0.1s | First retry delay for saves (doubles each attempt) |
+| `LOAD_MAX_RETRIES` | 2 | Number of load attempts on PermissionError |
+| `LOAD_BACKOFF_BASE` | 0.05s | First retry delay for loads |
 
-### Tuning
-- `SAVE_MAX_RETRIES` and `SAVE_BACKOFF_BASE` are module-level constants in `books.py`
-- Tests monkeypatch both to 0 delay for speed
-- For production use, 3 retries with 0.1s base covers typical antivirus/lock scenarios
-- Total worst-case wait: 0.3s (0.1 + 0.2)
+- **Total worst-case save wait:** 0.3s (0.1 + 0.2)
+- **Total worst-case load wait:** 0.05s
+- For typical antivirus/lock scenarios, the defaults are sufficient
+- Tests monkeypatch all constants to 0 for speed
+
+### Rollback
+
+To revert to inline retry behavior:
+1. Delete the `retry_with_backoff` function
+2. Restore the inline retry loop in `save_books` (git diff the commit)
+3. Remove the `_load_books_inner` method and flatten `load_books`
+4. Drop `LOAD_MAX_RETRIES` and `LOAD_BACKOFF_BASE` constants
 
 ---
 
@@ -47,12 +70,17 @@ Attempt 3: try write → fail → raise OSError
 | Test | What It Proves |
 |---|---|
 | `test_save_books_survives_corrupt_load` | Corrupt JSON file doesn't crash — collection starts empty and can still save |
-| `test_save_books_atomic_write_on_disk_error` | All retries exhausted → `OSError` raised with "after N attempts" message |
+| `test_save_books_atomic_write_on_disk_error` | All retries exhausted → `OSError` raised |
 | `test_save_books_retry_succeeds_after_transient_failure` | First attempt fails, retry succeeds — book is saved correctly |
+| `test_retry_with_backoff_succeeds_after_failures` | Generic helper recovers on third attempt |
+| `test_retry_with_backoff_exhausts_retries` | Generic helper raises last exception after exhaustion |
+| `test_retry_with_backoff_custom_exceptions` | Helper only catches specified exception types |
+| `test_load_books_retries_permission_error` | `load_books` retries on file-locked PermissionError |
+| `test_load_books_permission_error_exhausted` | `load_books` raises after retry exhaustion |
 
 ## Key Behavior
-- **Happy path:** Single write, no retry overhead
-- **Transient failure:** Retries with backoff, logs each attempt at WARNING level
+- **Happy path:** Single call, no retry overhead
+- **Transient failure:** Retries with exponential backoff, logs each attempt at WARNING level
 - **Retry success:** Logged at INFO level with attempt number
-- **Permanent failure:** `OSError` raised after all retries, logged at ERROR level
+- **Permanent failure:** Original exception re-raised after all retries, logged at ERROR level
 - **Crash during write:** Original file preserved (temp file is discarded)

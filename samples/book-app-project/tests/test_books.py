@@ -169,7 +169,7 @@ def test_save_books_atomic_write_on_disk_error(tmp_path, monkeypatch):
 
     monkeypatch.setattr(_tempfile, "mkstemp", failing_mkstemp)
 
-    with pytest.raises(OSError, match="after 2 attempts"):
+    with pytest.raises(OSError, match="Simulated disk full"):
         collection.add_book("Fail Book", "Author", 2024)
 
 
@@ -446,4 +446,99 @@ def test_strict_load_on_oversized_raises(tmp_path, monkeypatch):
     data_file.write_text(json.dumps([record]))
     monkeypatch.setattr(books, "DATA_FILE", str(data_file))
     with pytest.raises(OSError, match="exceeds"):
+        BookCollection()
+
+
+# --- Resilience sweep tests (Run Ex 15) ---
+
+
+def test_retry_with_backoff_succeeds_after_failures():
+    """retry_with_backoff succeeds when fn recovers before exhaustion."""
+    call_count = 0
+
+    def flaky():
+        nonlocal call_count
+        call_count += 1
+        if call_count < 3:
+            raise OSError("transient")
+        return "ok"
+
+    result = books.retry_with_backoff(
+        flaky, max_retries=3, backoff_base=0, op="test"
+    )
+    assert result == "ok"
+    assert call_count == 3
+
+
+def test_retry_with_backoff_exhausts_retries():
+    """retry_with_backoff raises last exception after exhaustion."""
+    def always_fail():
+        raise OSError("permanent")
+
+    with pytest.raises(OSError, match="permanent"):
+        books.retry_with_backoff(
+            always_fail, max_retries=2, backoff_base=0, op="test"
+        )
+
+
+def test_retry_with_backoff_custom_exceptions():
+    """retry_with_backoff only catches specified exception types."""
+    def raises_value_error():
+        raise ValueError("not retryable")
+
+    # Should not retry ValueError when only OSError is specified
+    with pytest.raises(ValueError, match="not retryable"):
+        books.retry_with_backoff(
+            raises_value_error,
+            max_retries=3, backoff_base=0, op="test",
+            exceptions=(OSError,),
+        )
+
+
+def test_load_books_retries_permission_error(tmp_path, monkeypatch):
+    """load_books retries on PermissionError (e.g., file locked)."""
+    data_file = tmp_path / "data.json"
+    data_file.write_text(json.dumps([
+        {"title": "Retry", "author": "Auth", "year": 2024, "read": False}
+    ]))
+    monkeypatch.setattr(books, "DATA_FILE", str(data_file))
+    monkeypatch.setattr(books, "LOAD_MAX_RETRIES", 3)
+    monkeypatch.setattr(books, "LOAD_BACKOFF_BASE", 0)
+
+    call_count = 0
+    original_open = Path.open
+
+    def flaky_open(self, *args, **kwargs):
+        nonlocal call_count
+        if self == Path(str(data_file)):
+            call_count += 1
+            if call_count < 2:
+                raise PermissionError("file locked by antivirus")
+        return original_open(self, *args, **kwargs)
+
+    monkeypatch.setattr(Path, "open", flaky_open)
+    collection = BookCollection()
+    assert len(collection.books) == 1
+    assert collection.books[0].title == "Retry"
+
+
+def test_load_books_permission_error_exhausted(tmp_path, monkeypatch):
+    """load_books raises PermissionError after retry exhaustion."""
+    data_file = tmp_path / "data.json"
+    data_file.write_text(json.dumps([
+        {"title": "X", "author": "A", "year": 2024, "read": False}
+    ]))
+    monkeypatch.setattr(books, "DATA_FILE", str(data_file))
+    monkeypatch.setattr(books, "LOAD_MAX_RETRIES", 2)
+    monkeypatch.setattr(books, "LOAD_BACKOFF_BASE", 0)
+
+    original_open = Path.open
+
+    def always_locked(self, *args, **kwargs):
+        if self == Path(str(data_file)):
+            raise PermissionError("locked")
+        return original_open(self, *args, **kwargs)
+
+    monkeypatch.setattr(Path, "open", always_locked)
+    with pytest.raises(PermissionError, match="locked"):
         BookCollection()
