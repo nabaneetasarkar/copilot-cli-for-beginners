@@ -51,3 +51,16 @@ def test_remove_book_invalid():
     collection = BookCollection()
     result = collection.remove_book("Nonexistent Book")
     assert result is False
+
+
+def test_find_book_by_title_case_insensitive():
+    """Deterministic test: find_book_by_title is case-insensitive."""
+    collection = BookCollection()
+    collection.add_book("The Great Gatsby", "F. Scott Fitzgerald", 1925)
+    # Search with different casing — should still find the book
+    book = collection.find_book_by_title("the great gatsby")
+    assert book is not None
+    assert book.title == "The Great Gatsby"
+    assert book.author == "F. Scott Fitzgerald"
+    assert book.year == 1925
+    assert book.read is False
