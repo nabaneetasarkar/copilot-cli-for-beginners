@@ -31,7 +31,12 @@ class BookCollection:
 
     def __init__(self):
         self.books: List[Book] = []
+        self._title_index: dict[str, Book] = {}
         self.load_books()
+
+    def _rebuild_index(self):
+        """Rebuild the title lookup index from the current books list."""
+        self._title_index = {b.title.lower(): b for b in self.books}
 
     def load_books(self):
         """Load books from the JSON file if it exists."""
@@ -40,6 +45,7 @@ class BookCollection:
             with open(DATA_FILE, "r") as f:
                 data = json.load(f)
                 self.books = [Book(**b) for b in data]
+            self._rebuild_index()
             elapsed_ms = (time.perf_counter() - start) * 1000
             logger.info(json.dumps({
                 "op": "load_books", "status": "ok",
@@ -101,6 +107,7 @@ class BookCollection:
         start = time.perf_counter()
         book = Book(title=title.strip(), author=author.strip(), year=year)
         self.books.append(book)
+        self._title_index[book.title.lower()] = book
         self.save_books()
         elapsed_ms = (time.perf_counter() - start) * 1000
         logger.info(json.dumps({
@@ -117,6 +124,8 @@ class BookCollection:
     def find_book_by_title(self, title: str) -> Optional[Book]:
         """Find a book by title. Case-insensitive by default.
 
+        Uses an O(1) dict lookup (case-insensitive mode) instead of
+        scanning the full list.
         Set env var BOOK_APP_CASE_SENSITIVE=1 for exact-case matching.
         """
         if CASE_SENSITIVE:
@@ -124,10 +133,7 @@ class BookCollection:
                 (book for book in self.books if book.title == title),
                 None,
             )
-        return next(
-            (book for book in self.books if book.title.lower() == title.lower()),
-            None,
-        )
+        return self._title_index.get(title.lower())
 
     def mark_as_read(self, title: str) -> bool:
         """Mark a book as read by title. Returns True if found, False otherwise."""
@@ -144,6 +150,7 @@ class BookCollection:
         book = self.find_book_by_title(title)
         if book:
             self.books.remove(book)
+            self._title_index.pop(book.title.lower(), None)
             self.save_books()
             elapsed_ms = (time.perf_counter() - start) * 1000
             logger.info(json.dumps({
