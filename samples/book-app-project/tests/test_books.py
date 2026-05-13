@@ -394,3 +394,56 @@ def test_load_strips_unknown_keys(tmp_path, monkeypatch):
     assert len(collection.books) == 1
     assert collection.books[0].title == "Dune"
     assert not hasattr(collection.books[0], "injected")
+
+
+# --- STRICT_LOAD flag tests (Run Ex 13) ---
+
+
+def test_strict_load_off_corrupt_recovers(tmp_path, monkeypatch):
+    """STRICT_LOAD OFF: corrupt data.json recovers to empty."""
+    monkeypatch.setattr(books, "STRICT_LOAD", False)
+    data_file = tmp_path / "data.json"
+    data_file.write_text("{not valid json")
+    monkeypatch.setattr(books, "DATA_FILE", str(data_file))
+    collection = BookCollection()
+    assert collection.books == []
+
+
+def test_strict_load_on_corrupt_raises(tmp_path, monkeypatch):
+    """STRICT_LOAD ON: corrupt data.json raises OSError."""
+    monkeypatch.setattr(books, "STRICT_LOAD", True)
+    data_file = tmp_path / "data.json"
+    data_file.write_text("{not valid json")
+    monkeypatch.setattr(books, "DATA_FILE", str(data_file))
+    with pytest.raises(OSError, match="corrupted"):
+        BookCollection()
+
+
+def test_strict_load_off_oversized_recovers(tmp_path, monkeypatch):
+    """STRICT_LOAD OFF: oversized data.json recovers to empty."""
+    monkeypatch.setattr(books, "STRICT_LOAD", False)
+    monkeypatch.setattr(books, "MAX_DATA_FILE_BYTES", 50)
+    data_file = tmp_path / "data.json"
+    record = {
+        "title": "X" * 200, "author": "A",
+        "year": 2000, "read": False,
+    }
+    data_file.write_text(json.dumps([record]))
+    monkeypatch.setattr(books, "DATA_FILE", str(data_file))
+    collection = BookCollection()
+    assert collection.books == []
+
+
+def test_strict_load_on_oversized_raises(tmp_path, monkeypatch):
+    """STRICT_LOAD ON: oversized data.json raises OSError."""
+    monkeypatch.setattr(books, "STRICT_LOAD", True)
+    monkeypatch.setattr(books, "MAX_DATA_FILE_BYTES", 50)
+    data_file = tmp_path / "data.json"
+    record = {
+        "title": "X" * 200, "author": "A",
+        "year": 2000, "read": False,
+    }
+    data_file.write_text(json.dumps([record]))
+    monkeypatch.setattr(books, "DATA_FILE", str(data_file))
+    with pytest.raises(OSError, match="exceeds"):
+        BookCollection()

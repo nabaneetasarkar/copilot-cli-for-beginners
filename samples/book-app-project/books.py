@@ -10,6 +10,7 @@ logger = logging.getLogger(__name__)
 DATA_FILE = "data.json"
 CASE_SENSITIVE = os.environ.get("BOOK_APP_CASE_SENSITIVE", "0") == "1"
 STRICT_VALIDATION = os.environ.get("BOOK_APP_STRICT_VALIDATION", "0") == "1"
+STRICT_LOAD = os.environ.get("BOOK_APP_STRICT_LOAD", "0") == "1"
 SAVE_MAX_RETRIES = 3
 SAVE_BACKOFF_BASE = 0.1  # seconds; doubles each retry
 MAX_DATA_FILE_BYTES = 10 * 1024 * 1024  # 10 MB — reject oversized data files
@@ -59,16 +60,19 @@ class BookCollection:
         try:
             file_size = os.path.getsize(DATA_FILE)
             if file_size > MAX_DATA_FILE_BYTES:
-                print(
-                    f"Warning: data.json exceeds {MAX_DATA_FILE_BYTES} bytes. "
-                    "Refusing to load."
+                msg = (
+                    f"data.json exceeds {MAX_DATA_FILE_BYTES} bytes "
+                    f"({file_size} bytes). Refusing to load."
                 )
-                self.books = []
                 logger.warning(json.dumps({
                     "op": "load_books", "status": "file_too_large",
                     "size_bytes": file_size,
                     "limit_bytes": MAX_DATA_FILE_BYTES,
                 }))
+                if STRICT_LOAD:
+                    raise OSError(msg)
+                print(f"Warning: {msg}")
+                self.books = []
                 return
             with open(DATA_FILE) as f:
                 data = json.load(f)
@@ -95,13 +99,17 @@ class BookCollection:
                 "op": "load_books", "status": "no_file",
                 "count": 0,
             }))
-        except json.JSONDecodeError:
-            print("Warning: data.json is corrupted. Starting with empty collection.")
-            self.books = []
+        except json.JSONDecodeError as exc:
             logger.warning(json.dumps({
                 "op": "load_books", "status": "corrupt_file",
                 "count": 0,
             }))
+            if STRICT_LOAD:
+                raise OSError(
+                    "data.json is corrupted and STRICT_LOAD is enabled"
+                ) from exc
+            print("Warning: data.json is corrupted. Starting with empty collection.")
+            self.books = []
 
     def save_books(self):
         """Save the current book collection to JSON.

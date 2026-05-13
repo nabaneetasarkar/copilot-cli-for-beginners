@@ -89,3 +89,49 @@ tests/test_books.py::test_strict_validation_off_allows_duplicates PASSED
 tests/test_books.py::test_strict_validation_on_rejects_duplicates PASSED
 tests/test_books.py::test_strict_validation_on_case_insensitive PASSED
 ```
+
+---
+
+### `BOOK_APP_STRICT_LOAD`
+
+| Setting | Value | Behavior |
+|---|---|---|
+| Default (OFF) | `0` or unset | Corrupt/oversized `data.json` recovers silently to empty collection |
+| ON | `1` | Corrupt/oversized `data.json` raises `OSError`, forcing operator intervention |
+
+**Lifecycle stage:** Validate — tested ON/OFF, stable
+
+**Why:** In development, silent recovery is convenient. In production or shared environments, silently discarding data is dangerous. `STRICT_LOAD=1` ensures data issues are surfaced immediately rather than hidden.
+
+**How to Use:**
+
+```powershell
+# Silent recovery (default)
+python book_app.py
+
+# Fail-fast on corrupt/oversized data
+$env:BOOK_APP_STRICT_LOAD="1"; python book_app.py
+```
+
+**Tests:**
+- `test_strict_load_off_corrupt_recovers` — corrupt file → empty collection (OFF)
+- `test_strict_load_on_corrupt_raises` — corrupt file → OSError (ON)
+- `test_strict_load_off_oversized_recovers` — oversized file → empty collection (OFF)
+- `test_strict_load_on_oversized_raises` — oversized file → OSError (ON)
+
+**Affected operations:** `load_books` (called during `BookCollection.__init__`)
+
+**Rollback:** Unset env var (`$env:BOOK_APP_STRICT_LOAD=""`) → original silent recovery behavior
+
+---
+
+## Validation Evidence (Run Ex 13)
+
+All three flags tested with ON and OFF states (36 tests total):
+
+```
+tests/test_books.py::test_strict_load_off_corrupt_recovers PASSED
+tests/test_books.py::test_strict_load_on_corrupt_raises PASSED
+tests/test_books.py::test_strict_load_off_oversized_recovers PASSED
+tests/test_books.py::test_strict_load_on_oversized_raises PASSED
+```
