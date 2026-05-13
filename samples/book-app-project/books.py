@@ -1,8 +1,8 @@
+from dataclasses import asdict, dataclass
 import json
 import logging
 import os
 import time
-from dataclasses import dataclass, asdict
 from typing import List, Optional
 
 logger = logging.getLogger(__name__)
@@ -40,14 +40,24 @@ class BookCollection:
                 data = json.load(f)
                 self.books = [Book(**b) for b in data]
             elapsed_ms = (time.perf_counter() - start) * 1000
-            logger.info(json.dumps({"op": "load_books", "status": "ok", "count": len(self.books), "elapsed_ms": round(elapsed_ms, 2)}))
+            logger.info(json.dumps({
+                "op": "load_books", "status": "ok",
+                "count": len(self.books),
+                "elapsed_ms": round(elapsed_ms, 2),
+            }))
         except FileNotFoundError:
             self.books = []
-            logger.info(json.dumps({"op": "load_books", "status": "no_file", "count": 0}))
+            logger.info(json.dumps({
+                "op": "load_books", "status": "no_file",
+                "count": 0,
+            }))
         except json.JSONDecodeError:
             print("Warning: data.json is corrupted. Starting with empty collection.")
             self.books = []
-            logger.warning(json.dumps({"op": "load_books", "status": "corrupt_file", "count": 0}))
+            logger.warning(json.dumps({
+                "op": "load_books", "status": "corrupt_file",
+                "count": 0,
+            }))
 
     def save_books(self):
         """Save the current book collection to JSON."""
@@ -71,7 +81,11 @@ class BookCollection:
         self.books.append(book)
         self.save_books()
         elapsed_ms = (time.perf_counter() - start) * 1000
-        logger.info(json.dumps({"op": "add_book", "status": "ok", "title": book.title, "elapsed_ms": round(elapsed_ms, 2)}))
+        logger.info(json.dumps({
+            "op": "add_book", "status": "ok",
+            "title": book.title,
+            "elapsed_ms": round(elapsed_ms, 2),
+        }))
         return book
 
     def list_books(self) -> List[Book]:
@@ -110,9 +124,16 @@ class BookCollection:
             self.books.remove(book)
             self.save_books()
             elapsed_ms = (time.perf_counter() - start) * 1000
-            logger.info(json.dumps({"op": "remove_book", "status": "ok", "title": title, "elapsed_ms": round(elapsed_ms, 2)}))
+            logger.info(json.dumps({
+                "op": "remove_book", "status": "ok",
+                "title": title,
+                "elapsed_ms": round(elapsed_ms, 2),
+            }))
             return True
-        logger.info(json.dumps({"op": "remove_book", "status": "not_found", "title": title}))
+        logger.info(json.dumps({
+            "op": "remove_book", "status": "not_found",
+            "title": title,
+        }))
         return False
 
     def find_by_author(self, author: str) -> List[Book]:

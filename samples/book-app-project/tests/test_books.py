@@ -1,10 +1,12 @@
-import sys
 import os
+import sys
+
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-import pytest
-import books
-from books import BookCollection
+import pytest  # noqa: E402
+
+import books  # noqa: E402
+from books import BookCollection  # noqa: E402
 
 
 @pytest.fixture(autouse=True)

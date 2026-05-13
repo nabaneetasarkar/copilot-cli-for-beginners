@@ -7,13 +7,13 @@ Measures average lookup time across varying collection sizes.
 Does NOT modify any production code — read-only benchmark.
 """
 
-import time
-import json
-import tempfile
 import os
+import tempfile
+import time
 
 # Patch DATA_FILE before importing BookCollection
 import books
+
 tmp = tempfile.NamedTemporaryFile(mode="w", suffix=".json", delete=False)
 tmp.write("[]")
 tmp.close()
