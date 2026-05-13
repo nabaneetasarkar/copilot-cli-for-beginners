@@ -141,7 +141,15 @@ class BookCollection:
         if book:
             book.read = True
             self.save_books()
+            logger.info(json.dumps({
+                "op": "mark_as_read", "status": "ok",
+                "title": title,
+            }))
             return True
+        logger.info(json.dumps({
+            "op": "mark_as_read", "status": "not_found",
+            "title": title,
+        }))
         return False
 
     def remove_book(self, title: str) -> bool:
@@ -167,4 +175,23 @@ class BookCollection:
 
     def find_by_author(self, author: str) -> List[Book]:
         """Find all books by a given author."""
-        return [b for b in self.books if b.author.lower() == author.lower()]
+        results = [b for b in self.books if b.author.lower() == author.lower()]
+        logger.info(json.dumps({
+            "op": "find_by_author", "status": "ok",
+            "author": author,
+            "matches": len(results),
+        }))
+        return results
+
+    def stats(self) -> dict:
+        """Return collection health metrics."""
+        total = len(self.books)
+        read_count = sum(1 for b in self.books if b.read)
+        metrics = {
+            "total_books": total,
+            "read": read_count,
+            "unread": total - read_count,
+            "unique_authors": len({b.author for b in self.books}),
+        }
+        logger.info(json.dumps({"op": "stats", **metrics}))
+        return metrics
