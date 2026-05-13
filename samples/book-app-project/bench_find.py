@@ -14,10 +14,11 @@ import time
 # Patch DATA_FILE before importing BookCollection
 import books
 
-tmp = tempfile.NamedTemporaryFile(mode="w", suffix=".json", delete=False)
-tmp.write("[]")
-tmp.close()
-books.DATA_FILE = tmp.name
+_bench_dir = tempfile.mkdtemp()
+_bench_file = os.path.join(_bench_dir, "data.json")
+with open(_bench_file, "w") as _f:
+    _f.write("[]")
+books.DATA_FILE = _bench_file
 
 from books import BookCollection
 
@@ -26,9 +27,11 @@ def run_benchmark(num_books: int, num_lookups: int = 1000) -> dict:
     """Benchmark find_book_by_title with a collection of num_books."""
     collection = BookCollection()
 
-    # Populate collection
+    # Populate collection directly (skip save_books for speed)
     for i in range(num_books):
-        collection.add_book(f"Book {i}", f"Author {i}", 2000 + (i % 26))
+        collection.books.append(
+            books.Book(title=f"Book {i}", author=f"Author {i}", year=2000 + (i % 26))
+        )
 
     target_title = f"Book {num_books - 1}"  # worst case: last book
 
@@ -71,5 +74,6 @@ if __name__ == "__main__":
             f"{result['max_ns']:>10,}"
         )
 
-    # Clean up temp file
-    os.unlink(tmp.name)
+    # Clean up temp directory
+    import shutil
+    shutil.rmtree(_bench_dir, ignore_errors=True)
