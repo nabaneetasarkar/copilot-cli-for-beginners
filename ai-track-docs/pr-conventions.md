@@ -29,7 +29,60 @@ Every PR should include these sections (auto-populated by the PR template):
 | **Evidence** | Test output, logs, or metrics proving the change works |
 | **Verification Steps** | How to verify locally |
 | **Risk & Rollback** | Risk level + how to revert |
+| **Reviewer Checklist** | Pre-approval checks for the reviewer |
 | **Track** | Level and exercise number |
+
+## Writing Effective Review Focus (Walk Ex 11)
+
+The **Review Focus** section tells the reviewer where to spend time. Good focus bullets:
+
+### Do
+
+- **Be specific about files and functions:** "Logic change in `books.py` `add_book` — new year validation"
+- **Rank by importance:** put the riskiest change first
+- **Call out intentional changes:** "Golden file updated — schema change is intentional"
+- **Flag areas of uncertainty:** "Not sure if `_rebuild_index` handles duplicates correctly"
+
+### Don't
+
+- Don't say "please review everything" — that's the same as saying nothing
+- Don't list trivial changes (whitespace, imports) — reviewers can see those
+- Don't repeat the summary — focus tells *where* to look, summary tells *what* changed
+
+### Examples
+
+**Good:**
+1. New validation in `books.py` `add_book` — rejects years > current year
+2. Edge case test for year 0 in `test_books.py` — boundary behavior
+3. Golden file updated to match new field default
+
+**Bad:**
+- Updated some files
+- Please check my code
+- Made changes to books.py
+
+## Verification Steps Guide
+
+Verification steps should be **copy-paste ready**. A reviewer should be able to run them without thinking:
+
+```markdown
+1. `git checkout walk/user/ex11-pr-review-focus`
+2. `cd samples/book-app-project`
+3. `python -m pytest tests/ -v --cov=. --cov-report=term-missing`
+4. `python -m ruff check .`
+5. Expected: 18 tests pass, coverage ≥ 68%, lint clean
+```
+
+## Rollback Guide
+
+Every PR should answer: "If this breaks production, how do I undo it?"
+
+| Scenario | Rollback |
+|---|---|
+| Code-only change | `git revert <SHA>` |
+| Schema/data change | Revert + re-run migration or update golden file |
+| Config change | Revert the config file, redeploy |
+| Dependency change | `git revert <SHA>`, then `pip install -e ".[dev]"` |
 
 ## Past Commit Messages — Review
 
