@@ -6,10 +6,22 @@ This guide explains how to add new functionality to `samples/book-app-project/bo
 
 ```
 books.py          — Book dataclass + BookCollection (data layer)
-book_app.py       — CLI handlers that call BookCollection methods
-utils.py          — Menu display and user input helpers
-tests/test_books.py — pytest tests for BookCollection
+book_app.py       — CLI handlers that delegate to BookCollection + utils
+utils.py          — Input helpers (get_book_details, get_title_input,
+                     get_author_input) + display helpers (format_book_list)
+tests/test_books.py — pytest tests for BookCollection and utils
 data.json         — JSON persistence file (auto-managed)
+```
+
+### Input Flow (Run Ex 3 refactor)
+
+CLI input handling is centralized in `utils.py`. The CLI layer (`book_app.py`)
+delegates to these helpers instead of calling `input()` directly:
+
+```
+book_app.handle_add()   → utils.get_book_details()
+book_app.handle_remove() → utils.get_title_input()
+book_app.handle_find()   → utils.get_author_input()
 ```
 
 ## How to Add a New Feature

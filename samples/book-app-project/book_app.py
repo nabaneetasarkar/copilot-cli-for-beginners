@@ -1,7 +1,7 @@
 import sys
 
 from books import BookCollection
-from utils import format_book_list
+from utils import format_book_list, get_author_input, get_book_details, get_title_input
 
 # Global collection instance
 collection = BookCollection()
@@ -15,12 +15,9 @@ def handle_list():
 def handle_add():
     print("\nAdd a New Book\n")
 
-    title = input("Title: ").strip()
-    author = input("Author: ").strip()
-    year_str = input("Year: ").strip()
+    title, author, year = get_book_details()
 
     try:
-        year = int(year_str) if year_str else 0
         collection.add_book(title, author, year)
         print("\nBook added successfully.\n")
     except ValueError as e:
@@ -30,7 +27,7 @@ def handle_add():
 def handle_remove():
     print("\nRemove a Book\n")
 
-    title = input("Enter the title of the book to remove: ").strip()
+    title = get_title_input("Enter the title of the book to remove: ")
     collection.remove_book(title)
 
     print("\nBook removed if it existed.\n")
@@ -39,7 +36,7 @@ def handle_remove():
 def handle_find():
     print("\nFind Books by Author\n")
 
-    author = input("Author name: ").strip()
+    author = get_author_input()
     books = collection.find_by_author(author)
 
     print(format_book_list(books))
