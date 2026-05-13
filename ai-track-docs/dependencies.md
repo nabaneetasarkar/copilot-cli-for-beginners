@@ -7,7 +7,8 @@
 | Python | Runtime | `requires-python` | `>=3.10` | 3.14.5 |
 | pytest | Test framework | `[project.optional-dependencies] dev` | `>=9.0.3,<10` | 9.0.3 |
 | pytest-cov | Coverage reporting | `[project.optional-dependencies] dev` | `>=7.1.0,<8` | 7.1.0 |
-| ruff | Linter/formatter | `[project.optional-dependencies] dev` | `>=0.15.0,<1` | 0.15.12 |
+| ruff | Linter/formatter | `[project.optional-dependencies] dev` | `>=0.15.12,<1` | 0.15.12 |
+| bandit | Security scanner | `[project.optional-dependencies] dev` | `>=1.9.4,<2` | 1.9.4 |
 
 ### Install dev dependencies
 
@@ -24,6 +25,12 @@ The book app (`books.py`, `book_app.py`, `utils.py`) uses only standard library 
 2. **Tightened lower bounds** — `pytest>=9.0` → `>=9.0.3`, `pytest-cov>=7.0` → `>=7.1.0` to match tested versions.
 3. **Added ruff** — was installed ad-hoc; now declared as a dev dependency (`>=0.15.0,<1`).
 4. **Production dependencies = none** — `dependencies = []` makes it explicit the app has no runtime third-party deps.
+
+### Changes (Run Ex 7)
+
+1. **Bumped ruff floor** — `>=0.15.0` → `>=0.15.12` to match installed/tested version, locking out 12 patch releases with known issues.
+2. **Bumped bandit floor** — `>=1.9.0` → `>=1.9.4` to match installed/tested version, locking out 4 patch releases.
+3. **Updated dependencies.md** — added bandit to dependency table (was missing).
 
 ### Rollback
 
