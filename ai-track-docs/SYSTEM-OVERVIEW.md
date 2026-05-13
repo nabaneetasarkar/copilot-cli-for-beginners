@@ -17,33 +17,130 @@ See [architecture.mmd](architecture.mmd) for the full component map with real fi
   - `samples/buggy-code/` — buggy JS/Python snippets for practice
   - `samples/agents/`, `samples/skills/`, `samples/mcp-configs/` — Copilot config examples
   - `.github/scripts/` — build tooling (header generation, demo GIF pipeline)
+  - `ai-track-docs/` — engineering track documentation (16 files)
 
-## Entry Points
+## Book App Subsystem (`samples/book-app-project/`)
 
-| Entry Point | Language | What It Does |
+### File Map
+
+| File | Role | Key Responsibilities |
 |---|---|---|
-| `samples/book-app-project/book_app.py` | Python | CLI menu — add/list/find/remove/mark-read books |
-| `samples/src/index.js` | JavaScript | Central module entry for JS sample code |
-| `package.json` scripts | Node | `generate:headers`, `scan:demos`, `create:tapes`, etc. |
+| `books.py` | Data layer | `Book` dataclass, `BookCollection` (CRUD, persistence, search, stats) |
+| `book_app.py` | CLI entry point | Command routing (`list`, `add`, `remove`, `find`, `help`) |
+| `utils.py` | Input/display helpers | `get_book_details()`, `get_title_input()`, `get_author_input()`, `format_book_list()` |
+| `bench_find.py` | Benchmark | Micro-benchmark for `find_book_by_title` O(1) lookup |
+| `data.json` | Persistence | Auto-managed JSON file (never edit manually) |
+| `pyproject.toml` | Config | Dependencies, ruff lint rules (8 rule sets), pytest config |
+| `tests/test_books.py` | Test suite | 24 tests, 100% test file coverage |
+| `tests/golden/books_snapshot.json` | Contract fixture | Golden file for JSON serialization contract |
+
+### Data Flow
+
+```
+User → book_app.py (CLI) → utils.py (input) → BookCollection (logic) → data.json (disk)
+                          ← utils.py (display) ← BookCollection      ← data.json
+```
+
+### BookCollection API
+
+| Method | Returns | Side Effects | Resilience |
+|---|---|---|---|
+| `add_book(title, author, year)` | `Book` | Saves to disk | Retry with backoff |
+| `remove_book(title)` | `bool` | Saves to disk | Retry with backoff |
+| `mark_as_read(title)` | `bool` | Saves to disk | Retry with backoff |
+| `find_book_by_title(title)` | `Book \| None` | None | O(1) dict lookup |
+| `find_by_author(author)` | `list[Book]` | None | Linear scan |
+| `list_books()` | `list[Book]` | None | — |
+| `stats()` | `dict` | None | — |
+| `load_books()` | None | Reads from disk | Handles corrupt/missing files |
+| `save_books()` | None | Atomic write to disk | 3 retries, exponential backoff |
+
+### Feature Flags
+
+| Flag | Default | Effect |
+|---|---|---|
+| `BOOK_APP_CASE_SENSITIVE` | OFF | Title lookups require exact case when ON |
+| `BOOK_APP_STRICT_VALIDATION` | OFF | Duplicate titles rejected when ON |
+
+See [feature-flags.md](feature-flags.md) for lifecycle details.
+
+### Resilience
+
+- **Atomic write:** temp file + `os.replace()` — crash never corrupts `data.json`
+- **Retry:** `save_books()` retries 3 times with 0.1s exponential backoff on `OSError`
+- **Corrupt file recovery:** `load_books()` gracefully handles malformed JSON
+
+See [resilience.md](resilience.md) for tuning and failure test details.
+
+### Observability
+
+All 6 operations emit structured JSON logs via `logging.getLogger(__name__)`:
+- `load_books`, `save_books`, `add_book`, `remove_book`, `mark_as_read`, `find_by_author`
+- Timing: `elapsed_ms` on `add_book`, `remove_book`, `load_books`
+
+See [logging.md](logging.md) for log schemas.
+
+### Static Analysis
+
+8 ruff rule sets: E, W, F, I, S, B, UP, RUF. T20 (print) suppressed for CLI files.
+
+See [lint.md](lint.md) for rule table and suppression docs.
+
+### Security
+
+`bandit` scans configured. S101 (assert) suppressed in tests only.
+
+See [security.md](security.md) for scan details.
 
 ## Test Approach
 
-- **Python:** pytest — tests live in `samples/book-app-project/tests/test_books.py`
-  - Uses `tmp_path` + `monkeypatch` fixtures to isolate the data file
-  - Covers: add, remove, mark-as-read, and negative cases
-- **JavaScript:** No test framework currently configured for `samples/src/`
-- **Run tests:** `cd samples/book-app-project && python -m pytest tests/`
+- **Framework:** pytest 9.0.3 + pytest-cov 7.1.0
+- **Test count:** 24 tests
+- **Coverage:** 73% overall, 90% on `books.py`, 100% on test file
+- **Isolation:** `use_temp_data_file` autouse fixture — each test gets a fresh temp `data.json`
+- **Contract tests:** Golden file locks JSON serialization format
+- **Run:**
+  ```powershell
+  cd samples/book-app-project
+  python -m pytest tests/ -v --cov=. --cov-report=term-missing
+  ```
 
-## Low-Risk Module Candidates
+See [build-test.md](build-test.md) for CI details.
 
-| # | Module | Why Low Risk |
+## CI / CD
+
+- **Workflow:** `.github/workflows/book-app-evidence.yml` (soft gate — non-blocking)
+- **Jobs:** tests + coverage, ruff lint, bandit scan → job summary
+- **PR template:** `.github/PULL_REQUEST_TEMPLATE.md` with review focus + reviewer checklist
+
+## Documentation Index
+
+| Doc | Purpose |
+|---|---|
+| [SYSTEM-OVERVIEW.md](SYSTEM-OVERVIEW.md) | This file — subsystem map |
+| [extending-books.md](extending-books.md) | How to add features + golden file guide |
+| [architecture.mmd](architecture.mmd) | Mermaid component diagram |
+| [delegation-checklist.md](delegation-checklist.md) | 7-step delegation workflow |
+| [evidence-guide.md](evidence-guide.md) | Evidence capture patterns for PRs |
+| [feature-flags.md](feature-flags.md) | Flag lifecycle + ON/OFF validation |
+| [resilience.md](resilience.md) | Retry/backoff behavior + failure tests |
+| [logging.md](logging.md) | Structured log schemas for all operations |
+| [lint.md](lint.md) | Ruff rule sets + suppression docs |
+| [security.md](security.md) | Bandit scan + security guidance |
+| [build-test.md](build-test.md) | CI workflow docs |
+| [perf-baseline.md](perf-baseline.md) | Benchmark results for find_book_by_title |
+| [dependencies.md](dependencies.md) | Dependency versions + upgrade notes |
+| [pr-conventions.md](pr-conventions.md) | PR review focus guide |
+| [onboarding-prompt.md](onboarding-prompt.md) | New contributor quick start |
+| [BACKLOG-EX12.md](BACKLOG-EX12.md) | Epic with 5 backlog items |
+
+## Risk Notes
+
+| Risk | Mitigation | File |
 |---|---|---|
-| 1 | `samples/book-app-project/books.py` | Pure data logic (CRUD on a list of books). Has existing tests. No I/O beyond a JSON file. Changes are easy to verify. |
-| 2 | `samples/book-app-project/utils.py` | UI helper functions only (print menu, get input). No side effects on data. |
-| 3 | `samples/src/utils/helpers.js` | Standalone JS utility. No dependencies on other modules. |
-
-## Chosen Module
-
-**`samples/book-app-project/books.py`** (`BookCollection` class + `Book` dataclass)
-
-**Why:** It has existing pytest coverage, contains pure data logic (add, remove, find, mark-as-read), and changes are immediately testable. It's isolated from the CLI layer (`book_app.py`) so modifications won't break user-facing flows. This makes it the safest place to experiment across the remaining exercises.
+| `data.json` corruption | Atomic write + corrupt file recovery | `books.py` L43-69 |
+| Disk full / I/O error | Retry with backoff (3 attempts) | `books.py` L77-120 |
+| Feature flag drift | Flags default OFF; lifecycle doc enforces retire step | `feature-flags.md` |
+| Stale docs | This overview links to all docs; review on each PR | This file |
+| Breaking JSON schema | Golden file contract test catches regressions | `tests/golden/` |
+| Lint rule gaps | 8 rule sets enabled; suppressions justified in lint.md | `pyproject.toml` |
