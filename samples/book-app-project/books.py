@@ -2,6 +2,7 @@ from dataclasses import asdict, dataclass
 import json
 import logging
 import os
+from pathlib import Path
 import tempfile
 import time
 
@@ -58,7 +59,7 @@ class BookCollection:
         """Load books from the JSON file if it exists."""
         start = time.perf_counter()
         try:
-            file_size = os.path.getsize(DATA_FILE)
+            file_size = Path(DATA_FILE).stat().st_size
             if file_size > MAX_DATA_FILE_BYTES:
                 msg = (
                     f"data.json exceeds {MAX_DATA_FILE_BYTES} bytes "
@@ -71,10 +72,10 @@ class BookCollection:
                 }))
                 if STRICT_LOAD:
                     raise OSError(msg)
-                print(f"Warning: {msg}")
+                print(f"Warning: {msg}")  # noqa: T201
                 self.books = []
                 return
-            with open(DATA_FILE) as f:
+            with Path(DATA_FILE).open() as f:
                 data = json.load(f)
                 for record in data:
                     extra = set(record.keys()) - _BOOK_KEYS
@@ -108,7 +109,7 @@ class BookCollection:
                 raise OSError(
                     "data.json is corrupted and STRICT_LOAD is enabled"
                 ) from exc
-            print("Warning: data.json is corrupted. Starting with empty collection.")
+            print("Warning: data.json is corrupted. Starting with empty collection.")  # noqa: T201
             self.books = []
 
     def save_books(self):
@@ -121,7 +122,7 @@ class BookCollection:
         and an OSError is raised.
         """
         data = json.dumps([asdict(b) for b in self.books], indent=2)
-        dir_name = os.path.dirname(os.path.abspath(DATA_FILE))
+        dir_name = str(Path(DATA_FILE).resolve().parent)
         last_exc: OSError | None = None
 
         for attempt in range(1, SAVE_MAX_RETRIES + 1):
@@ -132,7 +133,7 @@ class BookCollection:
                 )
                 with os.fdopen(fd, "w") as f:
                     f.write(data)
-                os.replace(tmp_path, DATA_FILE)
+                Path(tmp_path).replace(DATA_FILE)
                 if attempt > 1:
                     logger.info(json.dumps({
                         "op": "save_books", "status": "ok_after_retry",
@@ -142,8 +143,8 @@ class BookCollection:
             except OSError as exc:
                 last_exc = exc
                 # Clean up temp file if it was created
-                if tmp_path and os.path.exists(tmp_path):
-                    os.unlink(tmp_path)
+                if tmp_path and Path(tmp_path).exists():
+                    Path(tmp_path).unlink()
                 logger.warning(json.dumps({
                     "op": "save_books", "status": "retry",
                     "attempt": attempt,

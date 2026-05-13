@@ -1,8 +1,8 @@
 import json
-import os
+from pathlib import Path
 import sys
 
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 import pytest
 
@@ -234,7 +234,7 @@ def test_get_author_input_strips_whitespace(monkeypatch):
 
 # --- Contract / golden-file tests (Walk Ex 5) ---
 
-GOLDEN_DIR = os.path.join(os.path.dirname(__file__), "golden")
+GOLDEN_DIR = Path(__file__).parent / "golden"
 
 
 def test_save_produces_golden_json(tmp_path, monkeypatch):
@@ -250,8 +250,8 @@ def test_save_produces_golden_json(tmp_path, monkeypatch):
     collection.save_books()
 
     actual = json.loads(data_file.read_text())
-    golden_path = os.path.join(GOLDEN_DIR, "books_snapshot.json")
-    with open(golden_path) as f:
+    golden_path = GOLDEN_DIR / "books_snapshot.json"
+    with golden_path.open() as f:
         expected = json.load(f)
 
     assert actual == expected, (
@@ -264,7 +264,7 @@ def test_load_roundtrip_from_golden(tmp_path, monkeypatch):
     """Contract: loading the golden file produces the expected Book objects."""
     import shutil
 
-    golden_path = os.path.join(GOLDEN_DIR, "books_snapshot.json")
+    golden_path = GOLDEN_DIR / "books_snapshot.json"
     data_file = tmp_path / "data.json"
     shutil.copy(golden_path, data_file)
     monkeypatch.setattr(books, "DATA_FILE", str(data_file))
@@ -279,8 +279,8 @@ def test_load_roundtrip_from_golden(tmp_path, monkeypatch):
 
 def test_golden_schema_keys():
     """Contract: golden file contains exactly the expected keys per book."""
-    golden_path = os.path.join(GOLDEN_DIR, "books_snapshot.json")
-    with open(golden_path) as f:
+    golden_path = GOLDEN_DIR / "books_snapshot.json"
+    with golden_path.open() as f:
         data = json.load(f)
 
     expected_keys = {"title", "author", "year", "read"}
