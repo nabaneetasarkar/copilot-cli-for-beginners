@@ -1,0 +1,76 @@
+name: "Book App – Evidence (soft gate)"
+
+# Runs on every PR touching book-app-project. Non-blocking.
+on:
+  pull_request:
+    paths:
+      - "samples/book-app-project/**"
+
+# Never mark the PR as failed — continue-on-error on every step.
+jobs:
+  evidence:
+    name: Tests + Coverage + Lint
+    runs-on: ubuntu-latest
+    continue-on-error: true          # soft gate — never blocks merge
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies
+        working-directory: samples/book-app-project
+        run: pip install pytest pytest-cov ruff bandit
+
+      - name: Run tests with coverage
+        id: tests
+        working-directory: samples/book-app-project
+        continue-on-error: true
+        run: |
+          python -m pytest tests/ -v --cov=. --cov-report=term-missing \
+            2>&1 | tee test-output.txt
+          echo "exit_code=$?" >> "$GITHUB_OUTPUT"
+
+      - name: Run ruff lint
+        id: lint
+        working-directory: samples/book-app-project
+        continue-on-error: true
+        run: |
+          python -m ruff check . 2>&1 | tee lint-output.txt
+          echo "exit_code=$?" >> "$GITHUB_OUTPUT"
+
+      - name: Run bandit security scan
+        id: security
+        working-directory: samples/book-app-project
+        continue-on-error: true
+        run: |
+          python -m bandit -r books.py book_app.py utils.py -f txt \
+            2>&1 | tee security-output.txt
+          echo "exit_code=$?" >> "$GITHUB_OUTPUT"
+
+      - name: Post evidence to job summary
+        if: always()
+        working-directory: samples/book-app-project
+        run: |
+          echo "## Book App Evidence Summary" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+
+          echo "### Test Results" >> "$GITHUB_STEP_SUMMARY"
+          echo '```' >> "$GITHUB_STEP_SUMMARY"
+          tail -20 test-output.txt >> "$GITHUB_STEP_SUMMARY" 2>/dev/null || echo "No test output" >> "$GITHUB_STEP_SUMMARY"
+          echo '```' >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+
+          echo "### Lint Results" >> "$GITHUB_STEP_SUMMARY"
+          echo '```' >> "$GITHUB_STEP_SUMMARY"
+          cat lint-output.txt >> "$GITHUB_STEP_SUMMARY" 2>/dev/null || echo "No lint output" >> "$GITHUB_STEP_SUMMARY"
+          echo '```' >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+
+          echo "### Security Scan" >> "$GITHUB_STEP_SUMMARY"
+          echo '```' >> "$GITHUB_STEP_SUMMARY"
+          tail -15 security-output.txt >> "$GITHUB_STEP_SUMMARY" 2>/dev/null || echo "No security output" >> "$GITHUB_STEP_SUMMARY"
+          echo '```' >> "$GITHUB_STEP_SUMMARY"
