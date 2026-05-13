@@ -10,6 +10,8 @@ logger = logging.getLogger(__name__)
 DATA_FILE = "data.json"
 CASE_SENSITIVE = os.environ.get("BOOK_APP_CASE_SENSITIVE", "0") == "1"
 STRICT_VALIDATION = os.environ.get("BOOK_APP_STRICT_VALIDATION", "0") == "1"
+SAVE_MAX_RETRIES = 3
+SAVE_BACKOFF_BASE = 0.1  # seconds; doubles each retry
 
 
 @dataclass
@@ -70,27 +72,52 @@ class BookCollection:
         """Save the current book collection to JSON.
 
         Uses atomic write (temp file + rename) so a crash or disk error
-        never leaves a half-written data file.  If the write fails, the
-        original file is preserved and an OSError is raised.
+        never leaves a half-written data file.  Retries up to
+        SAVE_MAX_RETRIES times with exponential backoff on transient
+        OSError.  If all attempts fail, the original file is preserved
+        and an OSError is raised.
         """
         data = json.dumps([asdict(b) for b in self.books], indent=2)
         dir_name = os.path.dirname(os.path.abspath(DATA_FILE))
-        try:
-            fd, tmp_path = tempfile.mkstemp(
-                dir=dir_name, suffix=".tmp", prefix=".books_"
-            )
-            with os.fdopen(fd, "w") as f:
-                f.write(data)
-            os.replace(tmp_path, DATA_FILE)
-        except OSError as exc:
-            # Clean up temp file if it was created
-            if "tmp_path" in locals() and os.path.exists(tmp_path):
-                os.unlink(tmp_path)
-            logger.error(json.dumps({
-                "op": "save_books", "status": "error",
-                "error": str(exc),
-            }))
-            raise OSError(f"Failed to save books: {exc}") from exc
+        last_exc: OSError | None = None
+
+        for attempt in range(1, SAVE_MAX_RETRIES + 1):
+            tmp_path = None
+            try:
+                fd, tmp_path = tempfile.mkstemp(
+                    dir=dir_name, suffix=".tmp", prefix=".books_"
+                )
+                with os.fdopen(fd, "w") as f:
+                    f.write(data)
+                os.replace(tmp_path, DATA_FILE)
+                if attempt > 1:
+                    logger.info(json.dumps({
+                        "op": "save_books", "status": "ok_after_retry",
+                        "attempt": attempt,
+                    }))
+                return  # success
+            except OSError as exc:
+                last_exc = exc
+                # Clean up temp file if it was created
+                if tmp_path and os.path.exists(tmp_path):
+                    os.unlink(tmp_path)
+                logger.warning(json.dumps({
+                    "op": "save_books", "status": "retry",
+                    "attempt": attempt,
+                    "error": str(exc),
+                }))
+                if attempt < SAVE_MAX_RETRIES:
+                    time.sleep(SAVE_BACKOFF_BASE * (2 ** (attempt - 1)))
+
+        # All retries exhausted
+        logger.error(json.dumps({
+            "op": "save_books", "status": "error",
+            "error": str(last_exc),
+        }))
+        raise OSError(
+            f"Failed to save books after {SAVE_MAX_RETRIES} attempts: "
+            f"{last_exc}"
+        ) from last_exc
 
     def add_book(self, title: str, author: str, year: int) -> Book:
         """Create a new Book, append it to the collection, and save.
