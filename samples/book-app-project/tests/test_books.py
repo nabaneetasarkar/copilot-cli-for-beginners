@@ -6,7 +6,8 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 import pytest  # noqa: E402
 
 import books  # noqa: E402
-from books import BookCollection  # noqa: E402
+from books import Book, BookCollection  # noqa: E402
+from utils import format_book_list  # noqa: E402
 
 
 @pytest.fixture(autouse=True)
@@ -137,3 +138,22 @@ def test_save_books_atomic_write_on_disk_error(tmp_path, monkeypatch):
 
     with pytest.raises(IOError, match="Failed to save books"):
         collection.add_book("Fail Book", "Author", 2024)
+
+
+# --- format_book_list tests (Walk Ex 3) ---
+
+
+def test_format_book_list_empty():
+    """format_book_list returns 'No books found.' for an empty list."""
+    assert format_book_list([]) == "No books found."
+
+
+def test_format_book_list_with_books():
+    """format_book_list formats books with index, title, author, year, status."""
+    book_list = [
+        Book(title="Dune", author="Frank Herbert", year=1965, read=True),
+        Book(title="1984", author="George Orwell", year=1949, read=False),
+    ]
+    result = format_book_list(book_list)
+    assert "1. Dune by Frank Herbert (1965) - Read" in result
+    assert "2. 1984 by George Orwell (1949) - Unread" in result

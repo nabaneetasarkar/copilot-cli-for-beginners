@@ -1,29 +1,15 @@
 import sys
 
 from books import BookCollection
+from utils import format_book_list
 
 # Global collection instance
 collection = BookCollection()
 
 
-def show_books(books):
-    """Display books in a user-friendly format."""
-    if not books:
-        print("No books found.")
-        return
-
-    print("\nYour Book Collection:\n")
-
-    for index, book in enumerate(books, start=1):
-        status = "✓" if book.read else " "
-        print(f"{index}. [{status}] {book.title} by {book.author} ({book.year})")
-
-    print()
-
-
 def handle_list():
     books = collection.list_books()
-    show_books(books)
+    print(format_book_list(books))
 
 
 def handle_add():
@@ -56,7 +42,7 @@ def handle_find():
     author = input("Author name: ").strip()
     books = collection.find_by_author(author)
 
-    show_books(books)
+    print(format_book_list(books))
 
 
 def show_help():

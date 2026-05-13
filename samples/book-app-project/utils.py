@@ -25,12 +25,23 @@ def get_book_details():
     return title, author, year
 
 
-def print_books(books):
-    if not books:
-        print("No books in your collection.")
-        return
+def format_book_list(books) -> str:
+    """Format a list of Book objects into a human-readable string.
 
-    print("\nYour Books:")
+    Returns the formatted string (does not print).
+    """
+    if not books:
+        return "No books found."
+
+    lines = ["\nYour Books:"]
     for index, book in enumerate(books, start=1):
-        status = "✅ Read" if book.read else "📖 Unread"
-        print(f"{index}. {book.title} by {book.author} ({book.year}) - {status}")
+        status = "Read" if book.read else "Unread"
+        lines.append(
+            f"{index}. {book.title} by {book.author} ({book.year}) - {status}"
+        )
+    return "\n".join(lines)
+
+
+def print_books(books):
+    """Print formatted book list. Delegates to format_book_list."""
+    print(format_book_list(books))
