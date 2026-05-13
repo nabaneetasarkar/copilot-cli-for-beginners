@@ -1,3 +1,9 @@
+import json
+import logging
+
+logger = logging.getLogger(__name__)
+
+
 def print_menu():
     print("\n📚 Book Collection App")
     print("1. Add a book")
@@ -20,8 +26,16 @@ def get_book_details():
         year = int(year_input)
     except ValueError:
         print("Invalid year. Defaulting to 0.")
+        logger.warning(json.dumps({
+            "op": "get_book_details", "status": "invalid_year",
+            "raw_input": year_input,
+        }))
         year = 0
 
+    logger.info(json.dumps({
+        "op": "get_book_details", "status": "ok",
+        "title": title, "author": author, "year": year,
+    }))
     return title, author, year
 
 
