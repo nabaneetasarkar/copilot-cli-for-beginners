@@ -67,38 +67,52 @@ python -m pytest tests/ -v
 - **Mutations auto-save** — call `self.save_books()` after changing `self.books`
 - **Tests are isolated** — each test gets a fresh temp data file via the `monkeypatch` fixture
 
-## Contract Tests (Golden File)
+## Contract Tests
 
-The JSON persistence boundary has a **golden-file contract test** that locks down the serialization format.
+Two boundaries are validated by contract tests. If you change the shape of either, update the corresponding tests.
 
-### What it protects
+### Boundary 1: JSON Serialization (Golden File)
 
-- `save_books()` output must match `tests/golden/books_snapshot.json` exactly
-- `load_books()` must produce the correct `Book` objects from the golden file
-- Each book entry must contain exactly the keys: `title`, `author`, `year`, `read`
+The persistence boundary between `BookCollection.save_books()` and `data.json`.
 
-### When to update the golden file
+| Test | What it validates |
+|---|---|
+| `test_save_produces_golden_json` | Output matches `tests/golden/books_snapshot.json` |
+| `test_load_roundtrip_from_golden` | Loading golden file produces correct `Book` objects |
+| `test_golden_schema_keys` | Each entry has exactly `{title, author, year, read}` |
 
-Update `tests/golden/books_snapshot.json` **only** when you intentionally change the `Book` dataclass fields or the JSON format. Steps:
+**When to update:** Only when you change `Book` dataclass fields or JSON format.
 
+**How to update:**
 1. Make your change to `books.py`
-2. Run the contract tests — they will fail with a clear diff
-3. Verify the new format is correct
-4. Regenerate the golden file:
+2. Run tests — contract tests will fail with a clear diff
+3. Regenerate golden file:
+   ```powershell
+   cd samples/book-app-project
+   python -c "
+   from books import Book
+   from dataclasses import asdict
+   import json
+   books = [
+       Book(title='Dune', author='Frank Herbert', year=1965, read=True),
+       Book(title='1984', author='George Orwell', year=1949, read=False),
+   ]
+   print(json.dumps([asdict(b) for b in books], indent=2))
+   " > tests/golden/books_snapshot.json
+   ```
+4. Re-run tests, include golden file update in your PR
 
-```powershell
-cd samples/book-app-project
-python -c "
-from books import Book
-from dataclasses import asdict
-import json
-books = [
-    Book(title='Dune', author='Frank Herbert', year=1965, read=True),
-    Book(title='1984', author='George Orwell', year=1949, read=False),
-]
-print(json.dumps([asdict(b) for b in books], indent=2))
-" > tests/golden/books_snapshot.json
-```
+### Boundary 2: `stats()` API + Display Format
 
-5. Re-run tests to confirm they pass
-6. Include the golden file update in your PR with an explanation
+The interface between the data layer (`BookCollection.stats()`) and any consumer, plus the display format contract for `format_book_list`.
+
+| Test | What it validates |
+|---|---|
+| `test_stats_contract_keys` | Returns exactly `{total_books, read, unread, unique_authors}` |
+| `test_stats_contract_types` | All values are `int` |
+| `test_stats_contract_values` | Invariant: `total == read + unread` |
+| `test_format_book_list_contract_line_pattern` | Each line matches `N. Title by Author (YYYY) - Read\|Unread` |
+
+**When to update:** When you add/remove keys from `stats()` or change the display format.
+
+**How to update:** Adjust the expected keys/pattern in the test, document the change in your PR.
