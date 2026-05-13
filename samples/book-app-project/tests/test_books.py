@@ -85,3 +85,22 @@ def test_add_book_negative_year_raises():
     collection = BookCollection()
     with pytest.raises(ValueError, match="Year must not be negative"):
         collection.add_book("Some Title", "Some Author", -1)
+
+
+def test_find_book_case_insensitive_mode_off(monkeypatch):
+    """Toggle OFF (default): find_book_by_title is case-insensitive."""
+    monkeypatch.setattr(books, "CASE_SENSITIVE", False)
+    collection = BookCollection()
+    collection.add_book("Dune", "Frank Herbert", 1965)
+    assert collection.find_book_by_title("dune") is not None
+    assert collection.find_book_by_title("DUNE") is not None
+
+
+def test_find_book_case_sensitive_mode_on(monkeypatch):
+    """Toggle ON: find_book_by_title requires exact case."""
+    monkeypatch.setattr(books, "CASE_SENSITIVE", True)
+    collection = BookCollection()
+    collection.add_book("Dune", "Frank Herbert", 1965)
+    assert collection.find_book_by_title("Dune") is not None
+    assert collection.find_book_by_title("dune") is None
+    assert collection.find_book_by_title("DUNE") is None

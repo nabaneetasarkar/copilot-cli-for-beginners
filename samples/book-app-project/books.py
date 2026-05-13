@@ -1,5 +1,6 @@
 import json
 import logging
+import os
 import time
 from dataclasses import dataclass, asdict
 from typing import List, Optional
@@ -7,6 +8,7 @@ from typing import List, Optional
 logger = logging.getLogger(__name__)
 
 DATA_FILE = "data.json"
+CASE_SENSITIVE = os.environ.get("BOOK_APP_CASE_SENSITIVE", "0") == "1"
 
 
 @dataclass
@@ -77,7 +79,15 @@ class BookCollection:
         return self.books
 
     def find_book_by_title(self, title: str) -> Optional[Book]:
-        """Find a book by title (case-insensitive). Returns None if not found."""
+        """Find a book by title. Case-insensitive by default.
+
+        Set env var BOOK_APP_CASE_SENSITIVE=1 for exact-case matching.
+        """
+        if CASE_SENSITIVE:
+            return next(
+                (book for book in self.books if book.title == title),
+                None,
+            )
         return next(
             (book for book in self.books if book.title.lower() == title.lower()),
             None,
