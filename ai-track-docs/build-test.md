@@ -78,5 +78,34 @@ Run all checks with a single command from the repo root:
 python validate.py
 ```
 
+## CI — Soft Gating (Walk Ex 10)
+
+A GitHub Actions workflow runs automatically on every PR that touches `samples/book-app-project/`.
+
+### What it does
+
+| Step | Tool | Purpose |
+|---|---|---|
+| Tests + Coverage | pytest + pytest-cov | Runs test suite, reports coverage % |
+| Lint | ruff | Checks code style and security rules |
+| Security | bandit | Scans source for security issues |
+| Summary | GITHUB_STEP_SUMMARY | Posts results to the Actions job summary |
+
+### Key design: non-blocking
+
+- `continue-on-error: true` on every step and the job itself
+- The workflow **never blocks merges** — it only surfaces evidence
+- Results appear in the **Actions tab → job summary** on each PR
+
+### Workflow file
+
+`.github/workflows/book-app-evidence.yml`
+
+### Viewing results
+
+1. Open a PR that changes files in `samples/book-app-project/`
+2. Go to the **Actions** tab or the **Checks** section of the PR
+3. Click the workflow run → view the **Summary** section for test/lint/security output
+
 This runs every test suite and prints a summary. Exit code is 0 if all pass, 1 if any fail. New checks can be added to the `CHECKS` list in `validate.py`.
 - Python path: `C:\Users\nsarkar\AppData\Local\Python\pythoncore-3.14-64\python.exe` (if `python` isn't on PATH, use the full path)
