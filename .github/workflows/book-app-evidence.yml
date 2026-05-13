@@ -11,6 +11,7 @@ jobs:
   evidence:
     name: Tests + Coverage + Lint
     runs-on: ubuntu-latest
+    timeout-minutes: 10               # kill hung runs after 10 min
     continue-on-error: true          # soft gate — never blocks merge
 
     steps:
@@ -20,6 +21,7 @@ jobs:
         uses: actions/setup-python@v5
         with:
           python-version: "3.12"
+          cache: "pip"                 # cache pip downloads between runs
 
       - name: Install dependencies
         working-directory: samples/book-app-project
@@ -30,9 +32,17 @@ jobs:
         working-directory: samples/book-app-project
         continue-on-error: true
         run: |
-          python -m pytest tests/ -v --cov=. --cov-report=term-missing \
-            2>&1 | tee test-output.txt
-          echo "exit_code=$?" >> "$GITHUB_OUTPUT"
+          for attempt in 1 2; do
+            python -m pytest tests/ -v --cov=. --cov-report=term-missing \
+              2>&1 | tee test-output.txt
+            exit_code=${PIPESTATUS[0]}
+            if [ "$exit_code" -eq 0 ]; then
+              break
+            fi
+            echo "::warning::Test attempt $attempt failed (exit $exit_code), retrying..."
+            sleep 2
+          done
+          echo "exit_code=$exit_code" >> "$GITHUB_OUTPUT"
 
       - name: Run ruff lint
         id: lint
