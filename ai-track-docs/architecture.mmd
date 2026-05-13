@@ -1,0 +1,53 @@
+%% Architecture — Book App (samples/book-app-project/)
+%% Updated in Walk Ex 1 with real file paths and data flows.
+
+graph TD
+    subgraph CLI Layer
+        APP["book_app.py<br/>(CLI handlers: add, remove, find, list, mark-read)"]
+        UTILS["utils.py<br/>(menu display, user input helpers)"]
+    end
+
+    subgraph Data Layer
+        BOOKS["books.py<br/>(BookCollection + Book dataclass)"]
+    end
+
+    subgraph Persistence
+        DATA["data.json<br/>(JSON file — auto-managed)"]
+    end
+
+    subgraph Tests
+        TESTS["tests/test_books.py<br/>(pytest — 13 tests)"]
+        BENCH["bench_find.py<br/>(micro-benchmark)"]
+    end
+
+    subgraph Config
+        PYPROJECT["pyproject.toml<br/>(deps, ruff config)"]
+    end
+
+    APP -->|"calls BookCollection methods"| BOOKS
+    APP -->|"calls print_menu, get_user_choice"| UTILS
+    BOOKS -->|"atomic write / read"| DATA
+    TESTS -->|"exercises BookCollection"| BOOKS
+    BENCH -->|"benchmarks find_book_by_title"| BOOKS
+
+%% ─── Data Flows ───
+
+%% Flow 1: Add Book
+%% User → book_app.handle_add() → BookCollection.add_book(title, author, year)
+%%   → validates input → creates Book → appends to self.books
+%%   → save_books() → atomic write to data.json
+%%   → returns Book
+
+%% Flow 2: Find Book by Title
+%% User → book_app.handle_find() → BookCollection.find_by_author(author)
+%%   → linear scan over self.books (case-insensitive)
+%%   → returns List[Book]
+%% Also: find_book_by_title(title) used internally by mark_as_read, remove_book
+%%   → respects BOOK_APP_CASE_SENSITIVE toggle
+
+%% Flow 3: Load / Save Persistence
+%% On init: BookCollection.__init__() → load_books()
+%%   → reads data.json → deserializes to List[Book]
+%%   → handles FileNotFoundError (empty) and JSONDecodeError (corrupt)
+%% On mutation: add_book/remove_book/mark_as_read → save_books()
+%%   → serializes to JSON → writes to temp file → os.replace() (atomic)
