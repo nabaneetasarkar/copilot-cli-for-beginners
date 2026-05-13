@@ -106,3 +106,34 @@ def test_find_book_case_sensitive_mode_on(monkeypatch):
     assert collection.find_book_by_title("Dune") is not None
     assert collection.find_book_by_title("dune") is None
     assert collection.find_book_by_title("DUNE") is None
+
+
+def test_save_books_survives_corrupt_load(tmp_path, monkeypatch):
+    """Resilience: loading a corrupt file doesn't crash, collection starts empty."""
+    corrupt_file = tmp_path / "data.json"
+    corrupt_file.write_text("{bad json!!!")
+    monkeypatch.setattr(books, "DATA_FILE", str(corrupt_file))
+    collection = BookCollection()
+    assert collection.books == []
+    # Can still add books after corrupt load
+    collection.add_book("Recovery Book", "Author", 2024)
+    assert len(collection.books) == 1
+
+
+def test_save_books_atomic_write_on_disk_error(tmp_path, monkeypatch):
+    """Failure test: save_books raises IOError when disk write fails."""
+    data_file = tmp_path / "data.json"
+    data_file.write_text("[]")
+    monkeypatch.setattr(books, "DATA_FILE", str(data_file))
+    collection = BookCollection()
+
+    # Simulate disk failure by making mkstemp raise
+    import tempfile as _tempfile
+
+    def failing_mkstemp(**kwargs):
+        raise OSError("Simulated disk full")
+
+    monkeypatch.setattr(_tempfile, "mkstemp", failing_mkstemp)
+
+    with pytest.raises(IOError, match="Failed to save books"):
+        collection.add_book("Fail Book", "Author", 2024)

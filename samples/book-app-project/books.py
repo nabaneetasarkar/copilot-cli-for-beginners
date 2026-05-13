@@ -2,6 +2,7 @@ from dataclasses import asdict, dataclass
 import json
 import logging
 import os
+import tempfile
 import time
 from typing import List, Optional
 
@@ -60,9 +61,30 @@ class BookCollection:
             }))
 
     def save_books(self):
-        """Save the current book collection to JSON."""
-        with open(DATA_FILE, "w") as f:
-            json.dump([asdict(b) for b in self.books], f, indent=2)
+        """Save the current book collection to JSON.
+
+        Uses atomic write (temp file + rename) so a crash or disk error
+        never leaves a half-written data file.  If the write fails, the
+        original file is preserved and an IOError is raised.
+        """
+        data = json.dumps([asdict(b) for b in self.books], indent=2)
+        dir_name = os.path.dirname(os.path.abspath(DATA_FILE))
+        try:
+            fd, tmp_path = tempfile.mkstemp(
+                dir=dir_name, suffix=".tmp", prefix=".books_"
+            )
+            with os.fdopen(fd, "w") as f:
+                f.write(data)
+            os.replace(tmp_path, DATA_FILE)
+        except OSError as exc:
+            # Clean up temp file if it was created
+            if "tmp_path" in locals() and os.path.exists(tmp_path):
+                os.unlink(tmp_path)
+            logger.error(json.dumps({
+                "op": "save_books", "status": "error",
+                "error": str(exc),
+            }))
+            raise IOError(f"Failed to save books: {exc}") from exc
 
     def add_book(self, title: str, author: str, year: int) -> Book:
         """Create a new Book, append it to the collection, and save.
