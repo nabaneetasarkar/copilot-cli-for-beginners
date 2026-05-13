@@ -110,6 +110,36 @@ def test_find_book_case_sensitive_mode_on(monkeypatch):
     assert collection.find_book_by_title("DUNE") is None
 
 
+# --- STRICT_VALIDATION flag tests (Walk Ex 13) ---
+
+
+def test_strict_validation_off_allows_duplicates(monkeypatch):
+    """Flag OFF (default): duplicate titles are allowed."""
+    monkeypatch.setattr(books, "STRICT_VALIDATION", False)
+    collection = BookCollection()
+    collection.add_book("Dune", "Frank Herbert", 1965)
+    collection.add_book("Dune", "Another Author", 2020)
+    assert len(collection.books) == 2
+
+
+def test_strict_validation_on_rejects_duplicates(monkeypatch):
+    """Flag ON: adding a book with an existing title raises ValueError."""
+    monkeypatch.setattr(books, "STRICT_VALIDATION", True)
+    collection = BookCollection()
+    collection.add_book("Dune", "Frank Herbert", 1965)
+    with pytest.raises(ValueError, match="already exists"):
+        collection.add_book("Dune", "Another Author", 2020)
+
+
+def test_strict_validation_on_case_insensitive(monkeypatch):
+    """Flag ON: duplicate check is case-insensitive."""
+    monkeypatch.setattr(books, "STRICT_VALIDATION", True)
+    collection = BookCollection()
+    collection.add_book("Dune", "Frank Herbert", 1965)
+    with pytest.raises(ValueError, match="already exists"):
+        collection.add_book("dune", "Another Author", 2020)
+
+
 def test_save_books_survives_corrupt_load(tmp_path, monkeypatch):
     """Resilience: loading a corrupt file doesn't crash, collection starts empty."""
     corrupt_file = tmp_path / "data.json"
